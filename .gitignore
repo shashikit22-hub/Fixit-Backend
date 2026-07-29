@@ -2,7 +2,6 @@ bin/
 obj/
 binTwilioBuild/
 .vs/
-appsettings.json
 appsettings.Development.json
 *.user
 .DS_Store
