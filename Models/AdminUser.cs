@@ -14,4 +14,7 @@ public class AdminUser
 
     [MaxLength(20)]
     public string Role { get; set; } = "Admin";
+
+    [MaxLength(100)]
+    public string? FullName { get; set; }
 }

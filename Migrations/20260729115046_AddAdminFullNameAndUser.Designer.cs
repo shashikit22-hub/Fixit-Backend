@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using backend.Data;
 
@@ -11,9 +12,11 @@ using backend.Data;
 namespace backend.Migrations
 {
     [DbContext(typeof(FixitDbContext))]
-    partial class FixitDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260729115046_AddAdminFullNameAndUser")]
+    partial class AddAdminFullNameAndUser
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -61,7 +64,7 @@ namespace backend.Migrations
                         {
                             Id = 1,
                             FullName = "Admin",
-                            PasswordHash = "$2a$11$zU50wTJ2u3kHeh0UfrCln.ocLXKr/YwmvxOvkIahgrlj9PdwKBcn2",
+                            PasswordHash = "$2a$11$4ymPXW88Uga6Iy3p47xL7ukIFCZWwnNo5JWW/sTbyAvrKVInwSxcq",
                             Role = "Admin",
                             Username = "admin"
                         },
@@ -69,7 +72,7 @@ namespace backend.Migrations
                         {
                             Id = 2,
                             FullName = "VarunKumar",
-                            PasswordHash = "$2a$11$sB9mCPYd.3.vWJfTyQU34esMfB7.xw0g17bhGEt6kyX2gyvbmBxU6",
+                            PasswordHash = "$2a$11$WyRYg.qTeDJwzvTHs6Sm.uP/JivMCyM.VMOXxi7zj1SWqDGBKucka",
                             Role = "Admin",
                             Username = "admin@tinyfix.com"
                         });
@@ -262,27 +265,8 @@ namespace backend.Migrations
 
                     MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("Address")
-                        .HasMaxLength(500)
-                        .HasColumnType("varchar(500)");
-
-                    b.Property<string>("Email")
-                        .HasMaxLength(100)
-                        .HasColumnType("varchar(100)");
-
-                    b.Property<string>("GovtIdNumber")
-                        .HasMaxLength(50)
-                        .HasColumnType("varchar(50)");
-
                     b.Property<bool>("IsAvailable")
                         .HasColumnType("tinyint(1)");
-
-                    b.Property<DateTime>("JoinedAt")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<string>("LicenseNumber")
-                        .HasMaxLength(500)
-                        .HasColumnType("varchar(500)");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -294,18 +278,12 @@ namespace backend.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("varchar(20)");
 
-                    b.Property<string>("PhotoUrl")
-                        .HasMaxLength(500)
-                        .HasColumnType("varchar(500)");
-
                     b.Property<string>("Specialty")
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("varchar(50)");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("Email");
 
                     b.HasIndex("Phone")
                         .IsUnique();

@@ -31,7 +31,10 @@ public class ServiceRequestsController : ControllerBase
         [FromQuery] string? serviceType,
         [FromQuery] DateTime? from,
         [FromQuery] DateTime? to,
-        [FromQuery] string? search)
+        [FromQuery] string? search,
+        [FromQuery] string? rating,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20)
     {
         var query = _db.ServiceRequests
             .Include(sr => sr.Assignments)
@@ -48,17 +51,43 @@ public class ServiceRequestsController : ControllerBase
             query = query.Where(sr => sr.CreatedAt >= from.Value);
 
         if (to.HasValue)
-            query = query.Where(sr => sr.CreatedAt <= to.Value);
+            query = query.Where(sr => sr.CreatedAt <= to.Value.Date.AddDays(1));
 
         if (!string.IsNullOrEmpty(search))
             query = query.Where(sr =>
                 sr.CustomerName.Contains(search) ||
                 sr.CustomerPhone.Contains(search) ||
-                (sr.Description != null && sr.Description.Contains(search)));
+                (sr.Description != null && sr.Description.Contains(search)) ||
+                (sr.RequestCode != null && sr.RequestCode.Contains(search)));
 
-        var requests = await query.OrderByDescending(sr => sr.CreatedAt).ToListAsync();
+        if (!string.IsNullOrEmpty(rating))
+        {
+            if (rating == "rated")
+                query = query.Where(sr => sr.Rating.HasValue);
+            else if (rating == "unrated")
+                query = query.Where(sr => !sr.Rating.HasValue);
+            else if (int.TryParse(rating, out var ratingValue))
+                query = query.Where(sr => sr.Rating == ratingValue);
+        }
 
-        var result = requests.Select(MapToDto).ToList();
+        var totalCount = await query.CountAsync();
+        if (page < 1) page = 1;
+        if (pageSize < 1) pageSize = 20;
+        if (pageSize > 100) pageSize = 100;
+
+        var requests = await query
+            .OrderByDescending(sr => sr.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
+
+        var result = new
+        {
+            data = requests.Select(MapToDto).ToList(),
+            totalCount,
+            page,
+            pageSize
+        };
         return Ok(result);
     }
 

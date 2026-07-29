@@ -17,5 +17,22 @@ public class Technician
 
     public bool IsAvailable { get; set; } = true;
 
+    [MaxLength(100)]
+    public string? Email { get; set; }
+
+    [MaxLength(500)]
+    public string? Address { get; set; }
+
+    [MaxLength(500)]
+    public string? PhotoUrl { get; set; }
+
+    [MaxLength(50)]
+    public string? GovtIdNumber { get; set; }
+
+    [MaxLength(500)]
+    public string? LicenseNumber { get; set; }
+
+    public DateTime JoinedAt { get; set; } = DateTime.UtcNow;
+
     public ICollection<Assignment> Assignments { get; set; } = new List<Assignment>();
 }

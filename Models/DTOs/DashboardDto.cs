@@ -10,5 +10,11 @@ public class DashboardDto
     public int TotalRequests { get; set; }
     public int AvailableTechnicians { get; set; }
     public int TotalTechnicians { get; set; }
+    public int TodayNewCount { get; set; }
+    public int TodayCompletedCount { get; set; }
+    public int PendingAssignments { get; set; }
+    public double? AverageRating { get; set; }
+    public Dictionary<int, int> RatingDistribution { get; set; } = new();
+    public Dictionary<string, int> ServiceTypeDistribution { get; set; } = new();
     public List<ServiceRequestResponseDto> RecentRequests { get; set; } = new();
 }

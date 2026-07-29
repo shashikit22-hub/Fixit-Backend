@@ -34,6 +34,7 @@ public class FixitDbContext : DbContext
         modelBuilder.Entity<Technician>(entity =>
         {
             entity.HasIndex(e => e.Phone).IsUnique();
+            entity.HasIndex(e => e.Email);
         });
 
         modelBuilder.Entity<Assignment>(entity =>
@@ -62,13 +63,24 @@ public class FixitDbContext : DbContext
             entity.HasIndex(e => e.Username).IsUnique();
         });
 
-        // Seed default admin user (password: admin123)
-        modelBuilder.Entity<AdminUser>().HasData(new AdminUser
-        {
-            Id = 1,
-            Username = "admin",
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword("admin123"),
-            Role = "Admin"
-        });
+        // Seed default admin users
+        modelBuilder.Entity<AdminUser>().HasData(
+            new AdminUser
+            {
+                Id = 1,
+                Username = "admin",
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword("admin123"),
+                Role = "Admin",
+                FullName = "Admin"
+            },
+            new AdminUser
+            {
+                Id = 2,
+                Username = "admin@tinyfix.com",
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword("Admin@#$123456"),
+                Role = "Admin",
+                FullName = "VarunKumar"
+            }
+        );
     }
 }

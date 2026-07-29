@@ -33,7 +33,8 @@ public class AuthController : ControllerBase
         {
             Token = token,
             Username = user.Username,
-            Role = user.Role
+            Role = user.Role,
+            FullName = user.FullName
         });
     }
 
@@ -48,7 +49,8 @@ public class AuthController : ControllerBase
         {
             Username = dto.Username,
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password),
-            Role = dto.Role
+            Role = dto.Role,
+            FullName = dto.FullName
         };
 
         _db.AdminUsers.Add(user);
