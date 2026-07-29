@@ -168,6 +168,24 @@ public class WhatsAppController : ControllerBase
                     longitude = locObj.TryGetProperty("longitude", out var lonProp) ? lonProp.GetDouble() : null;
                 }
                 break;
+
+            case "interactive":
+                if (message.TryGetProperty("interactive", out var interactiveObj))
+                {
+                    // Handle button replies
+                    if (interactiveObj.TryGetProperty("button_reply", out var buttonReply) &&
+                        buttonReply.TryGetProperty("id", out var buttonId))
+                    {
+                        textBody = buttonId.GetString();
+                    }
+                    // Handle list replies
+                    else if (interactiveObj.TryGetProperty("list_reply", out var listReply) &&
+                             listReply.TryGetProperty("id", out var listId))
+                    {
+                        textBody = listId.GetString();
+                    }
+                }
+                break;
         }
 
         _logger.LogInformation(

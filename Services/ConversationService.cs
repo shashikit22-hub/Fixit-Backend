@@ -10,11 +10,14 @@ public class ConversationService
     private readonly WhatsAppService _whatsApp;
     private readonly ILogger<ConversationService> _logger;
 
-    private static readonly Dictionary<string, string> ServiceTypes = new()
+    private static readonly Dictionary<string, string> ServiceTypes = new(StringComparer.OrdinalIgnoreCase)
     {
         ["1"] = "Electrician",
         ["2"] = "Plumber",
-        ["3"] = "Carpenter"
+        ["3"] = "Carpenter",
+        ["electrician"] = "Electrician",
+        ["plumber"] = "Plumber",
+        ["carpenter"] = "Carpenter"
     };
 
     public ConversationService(FixitDbContext db, WhatsAppService whatsApp, ILogger<ConversationService> logger)
@@ -62,6 +65,35 @@ public class ConversationService
         var text = body?.Trim() ?? "";
         var textLower = text.ToLowerInvariant();
 
+        // Global commands — available at any step
+        if (textLower is "help" or "?")
+        {
+            await _whatsApp.SendMessageAsync(phone,
+                "*FIXIT Help* ℹ️\n\n" +
+                "Here's what you can do:\n\n" +
+                "📋 *Commands:*\n" +
+                "• *menu* or *start* — Start a new request\n" +
+                "• *reset* or *cancel* — Cancel current request\n" +
+                "• *help* or *?* — Show this help message\n\n" +
+                "📝 *How it works:*\n" +
+                "1. Choose a service (Electrician, Plumber, or Carpenter)\n" +
+                "2. Send a photo of the issue\n" +
+                "3. Optionally send a video\n" +
+                "4. Share your location\n" +
+                "5. Provide your details\n\n" +
+                "A technician will be assigned to you shortly after! 🔧");
+            return;
+        }
+
+        if (textLower is "menu" or "start")
+        {
+            ResetState(state);
+            state.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+            await HandleGreetingAsync(state);
+            return;
+        }
+
         // Handle reset/cancel commands at any step
         if (textLower is "reset" or "cancel")
         {
@@ -69,7 +101,9 @@ public class ConversationService
             state.UpdatedAt = DateTime.UtcNow;
             await _db.SaveChangesAsync();
             await _whatsApp.SendMessageAsync(phone,
-                "🔄 Conversation reset. Send any message to start a new service request.");
+                "🔄 *Request Cancelled*\n\n" +
+                "Your current request has been cleared.\n" +
+                "Send *menu* or any message to start a new service request.");
             return;
         }
 
@@ -174,22 +208,37 @@ public class ConversationService
         state.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
 
-        var message = $"👋 Welcome to FIXIT, {state.ProfileName ?? "Customer"}!\n\n" +
-                      "We're here to help with your home repairs. Please select a service:\n\n" +
-                      "1️⃣ Electrician\n" +
-                      "2️⃣ Plumber\n" +
-                      "3️⃣ Carpenter\n\n" +
-                      "Reply with the number (1, 2, or 3).";
+        var buttons = new (string Id, string Title)[]
+        {
+            ("electrician", "⚡ Electrician"),
+            ("plumber", "🔧 Plumber"),
+            ("carpenter", "🪚 Carpenter")
+        };
 
-        await _whatsApp.SendMessageAsync(state.PhoneNumber, message);
+        await _whatsApp.SendInteractiveButtonsAsync(
+            state.PhoneNumber,
+            "Welcome to FIXIT!",
+            $"Hi {state.ProfileName ?? "there"}! 👋\n\nWe're here to help with your home repairs.\n\nWhat service do you need?",
+            buttons);
     }
 
     private async Task HandleServiceSelectionAsync(ConversationState state, string text)
     {
         if (!ServiceTypes.TryGetValue(text.Trim(), out var serviceType))
         {
-            await _whatsApp.SendMessageAsync(state.PhoneNumber,
-                "❌ Please reply with a valid option:\n1 - Electrician\n2 - Plumber\n3 - Carpenter");
+            // Resend buttons with friendly message
+            var buttons = new (string Id, string Title)[]
+            {
+                ("electrician", "⚡ Electrician"),
+                ("plumber", "🔧 Plumber"),
+                ("carpenter", "🪚 Carpenter")
+            };
+
+            await _whatsApp.SendInteractiveButtonsAsync(
+                state.PhoneNumber,
+                "Select a Service",
+                "Hmm, I didn't catch that. Please tap one of the options below to select a service:",
+                buttons);
             return;
         }
 
@@ -199,8 +248,9 @@ public class ConversationService
         await _db.SaveChangesAsync();
 
         await _whatsApp.SendMessageAsync(state.PhoneNumber,
-            $"✅ You selected: {serviceType}\n\n" +
-            "📸 Please send a photo of the issue so our technician can better understand the problem.");
+            $"✅ Great choice! *{serviceType}* selected.\n\n" +
+            "📸 Now, please send a *photo* of the issue.\n\n" +
+            "A clear photo helps our technician understand the problem and come prepared with the right tools.");
     }
 
     private async Task HandlePhotoAsync(ConversationState state, int numMedia, string? mediaUrl, string? mediaType)
@@ -209,7 +259,9 @@ public class ConversationService
             (mediaType != null && !mediaType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)))
         {
             await _whatsApp.SendMessageAsync(state.PhoneNumber,
-                "📸 Please send a photo of the issue to proceed.");
+                "📸 I need a *photo* of the issue to continue.\n\n" +
+                "💡 *Tip:* Use the camera icon 📷 or send an image from your gallery. " +
+                "Make sure the problem area is clearly visible.");
             return;
         }
 
@@ -218,10 +270,17 @@ public class ConversationService
         state.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
 
-        await _whatsApp.SendMessageAsync(state.PhoneNumber,
-            "✅ Photo received!\n\n" +
-            "🎥 Now, please send a short video of the issue for better understanding.\n" +
-            "Or type *skip* if you don't have a video.");
+        var buttons = new (string Id, string Title)[]
+        {
+            ("send_video", "📹 Send Video"),
+            ("skip", "⏭️ Skip")
+        };
+
+        await _whatsApp.SendInteractiveButtonsAsync(
+            state.PhoneNumber,
+            "Photo Received! ✅",
+            "Great, got your photo!\n\nWould you also like to send a short *video* of the issue? A video helps our technician get a better understanding of the problem.",
+            buttons);
     }
 
     private async Task HandleVideoAsync(ConversationState state, string text, int numMedia, string? mediaUrl, string? mediaType)
@@ -234,16 +293,37 @@ public class ConversationService
             await _db.SaveChangesAsync();
 
             await _whatsApp.SendMessageAsync(state.PhoneNumber,
-                "👍 Video skipped.\n\n" +
-                "📍 Please share your location using WhatsApp's location feature, or type your full address.");
+                "👍 No worries, video skipped!\n\n" +
+                "📍 Now I need your *location* so we can send a technician.\n\n" +
+                "You can either:\n" +
+                "• Tap the 📎 icon → *Location* to share your GPS location\n" +
+                "• Or type your *full address*");
+            return;
+        }
+
+        // If user tapped "Send Video" button, prompt them to send the actual video
+        if (text.Trim().Equals("send_video", StringComparison.OrdinalIgnoreCase))
+        {
+            await _whatsApp.SendMessageAsync(state.PhoneNumber,
+                "🎥 Please send your video now.\n\n" +
+                "💡 *Tip:* Use the camera icon 📷 to record or send a video from your gallery.");
             return;
         }
 
         if (numMedia < 1 || string.IsNullOrEmpty(mediaUrl) ||
             (mediaType != null && !mediaType.StartsWith("video/", StringComparison.OrdinalIgnoreCase)))
         {
-            await _whatsApp.SendMessageAsync(state.PhoneNumber,
-                "🎥 Please send a video, or type *skip* to continue without one.");
+            var buttons = new (string Id, string Title)[]
+            {
+                ("send_video", "📹 Send Video"),
+                ("skip", "⏭️ Skip")
+            };
+
+            await _whatsApp.SendInteractiveButtonsAsync(
+                state.PhoneNumber,
+                "Video Required",
+                "I was expecting a video. Please send a video of the issue, or tap Skip to continue without one.",
+                buttons);
             return;
         }
 
@@ -254,7 +334,10 @@ public class ConversationService
 
         await _whatsApp.SendMessageAsync(state.PhoneNumber,
             "✅ Video received!\n\n" +
-            "📍 Please share your location using WhatsApp's location feature, or type your full address.");
+            "📍 Now I need your *location* so we can send a technician.\n\n" +
+            "You can either:\n" +
+            "• Tap the 📎 icon → *Location* to share your GPS location\n" +
+            "• Or type your *full address*");
     }
 
     private async Task HandleLocationAsync(ConversationState state, string text, double? lat, double? lon)
@@ -271,7 +354,11 @@ public class ConversationService
         else
         {
             await _whatsApp.SendMessageAsync(state.PhoneNumber,
-                "📍 Please share your location or type your address to continue.");
+                "📍 I still need your location to proceed.\n\n" +
+                "You can either:\n" +
+                "• Tap the 📎 icon → *Location* to share your GPS\n" +
+                "• Or type your *full address*\n\n" +
+                "This helps us send the nearest available technician to you.");
             return;
         }
 
@@ -280,10 +367,11 @@ public class ConversationService
         await _db.SaveChangesAsync();
 
         await _whatsApp.SendMessageAsync(state.PhoneNumber,
-            "✅ Location received!\n\n" +
-            "📝 Please provide your details in the following format:\n" +
-            "*Name, House Number, Alternate Phone*\n\n" +
-            "Example: Ravi Kumar, #42 2nd Cross, 9876543210");
+            "✅ Location saved!\n\n" +
+            "📝 Last step! Please provide your details in this format:\n\n" +
+            "*Name, House/Flat No., Alternate Phone*\n\n" +
+            "Example:\n_Ravi Kumar, #42 2nd Cross MG Road, 9876543210_\n\n" +
+            "💡 Alternate phone is optional — just send Name and House No. if you prefer.");
     }
 
     private async Task HandleCustomerDetailsAsync(ConversationState state, string text)
@@ -293,8 +381,10 @@ public class ConversationService
         if (parts.Length < 2)
         {
             await _whatsApp.SendMessageAsync(state.PhoneNumber,
-                "❌ Please provide details in the format:\n*Name, House Number, Alternate Phone*\n\n" +
-                "Example: Ravi Kumar, #42 2nd Cross, 9876543210");
+                "😅 I couldn't parse that. Please provide your details separated by commas:\n\n" +
+                "*Name, House/Flat No., Alternate Phone*\n\n" +
+                "Example:\n_Ravi Kumar, #42 2nd Cross MG Road, 9876543210_\n\n" +
+                "💡 Make sure to include at least your *name* and *house/flat number*.");
             return;
         }
 
@@ -332,21 +422,25 @@ public class ConversationService
         state.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
 
-        // Build summary message
+        // Build rich summary message
         var locationInfo = state.Latitude.HasValue
-            ? $"📍 GPS: {state.Latitude:F4}, {state.Longitude:F4}"
-            : $"📍 Address: {state.AddressText}";
+            ? $"📍 *Location:* GPS ({state.Latitude:F4}, {state.Longitude:F4})"
+            : $"📍 *Location:* {state.AddressText}";
 
-        var summary = $"✅ *Service Request Created!*\n\n" +
-                      $"🔖 Request ID: *{requestCode}*\n" +
-                      $"🔧 Service: {serviceRequest.ServiceType}\n" +
-                      $"👤 Name: {customerName}\n" +
-                      $"🏠 House: {houseNumber}\n" +
-                      (altPhone != null ? $"📞 Alt Phone: {altPhone}\n" : "") +
+        var summary = $"✅ *Service Request Submitted!*\n\n" +
+                      $"━━━━━━━━━━━━━━━━━━\n" +
+                      $"🔖 *Request ID:* {requestCode}\n" +
+                      $"🔧 *Service:* {serviceRequest.ServiceType}\n" +
+                      $"👤 *Name:* {customerName}\n" +
+                      $"🏠 *House:* {houseNumber}\n" +
+                      (altPhone != null ? $"📞 *Alt Phone:* {altPhone}\n" : "") +
                       $"{locationInfo}\n" +
-                      $"📸 Photo: ✅\n" +
-                      (serviceRequest.VideoUrl != null ? $"🎥 Video: ✅\n" : $"🎥 Video: Skipped\n") +
-                      $"\nWe'll assign a technician shortly. Thank you for choosing FIXIT! 🙏";
+                      $"📸 *Photo:* Attached ✅\n" +
+                      (serviceRequest.VideoUrl != null ? $"🎥 *Video:* Attached ✅\n" : $"🎥 *Video:* Skipped\n") +
+                      $"━━━━━━━━━━━━━━━━━━\n\n" +
+                      $"Our team will review your request and assign a technician shortly.\n\n" +
+                      $"Thank you for choosing *FIXIT*! 🙏\n" +
+                      $"Send *menu* anytime to place a new request.";
 
         await _whatsApp.SendMessageAsync(state.PhoneNumber, summary);
 
@@ -358,8 +452,22 @@ public class ConversationService
     {
         if (!int.TryParse(text.Trim(), out var rating) || rating < 1 || rating > 5)
         {
-            await _whatsApp.SendMessageAsync(state.PhoneNumber,
-                "Please reply with a number from 1 to 5 to rate our service.");
+            // Resend the interactive list for rating
+            var rows = new (string Id, string Title, string? Description)[]
+            {
+                ("1", "⭐ Poor", "1 star — Not satisfied"),
+                ("2", "⭐⭐ Fair", "2 stars — Below expectations"),
+                ("3", "⭐⭐⭐ Good", "3 stars — Met expectations"),
+                ("4", "⭐⭐⭐⭐ Very Good", "4 stars — Above expectations"),
+                ("5", "⭐⭐⭐⭐⭐ Excellent", "5 stars — Outstanding service")
+            };
+
+            await _whatsApp.SendInteractiveListAsync(
+                state.PhoneNumber,
+                "Rate Our Service",
+                "Please select a rating from the list below to let us know how we did:",
+                "Select Rating",
+                rows);
             return;
         }
 
@@ -381,9 +489,20 @@ public class ConversationService
         await _db.SaveChangesAsync();
 
         var stars = new string('⭐', rating);
-        await _whatsApp.SendMessageAsync(state.PhoneNumber,
-            $"🙏 Thank you for your rating! {stars}\n\n" +
-            "We appreciate your feedback. See you next time!");
+        var thankYouMessage = rating switch
+        {
+            >= 4 => $"🙏 *Thank you for your {stars} rating!*\n\n" +
+                    $"We're thrilled you had a great experience! Your feedback motivates our team.\n\n" +
+                    $"See you next time on *FIXIT*! 💙",
+            3 => $"🙏 *Thank you for your {stars} rating!*\n\n" +
+                 $"We appreciate your honest feedback. We'll keep working to improve our service.\n\n" +
+                 $"See you next time on *FIXIT*! 💙",
+            _ => $"🙏 *Thank you for your {stars} rating.*\n\n" +
+                 $"We're sorry we didn't meet your expectations. Your feedback helps us do better.\n\n" +
+                 $"We hope to serve you better next time! 💙"
+        };
+
+        await _whatsApp.SendMessageAsync(state.PhoneNumber, thankYouMessage);
 
         _logger.LogInformation("Rating {Rating} received from {Phone}", rating, state.PhoneNumber);
     }
