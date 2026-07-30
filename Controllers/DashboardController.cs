@@ -29,6 +29,59 @@ public class DashboardController : ControllerBase
             .Select(r => r.Rating!.Value)
             .ToListAsync();
 
+        // Weekly trend: last 7 days
+        var weekStart = todayUtc.AddDays(-6);
+        var newByDate = await requests
+            .Where(r => r.CreatedAt >= weekStart)
+            .GroupBy(r => r.CreatedAt.Date)
+            .Select(g => new { Date = g.Key, Count = g.Count() })
+            .ToListAsync();
+        var completedByDate = await requests
+            .Where(r => r.Status == "Completed" && r.UpdatedAt.HasValue && r.UpdatedAt.Value >= weekStart)
+            .GroupBy(r => r.UpdatedAt!.Value.Date)
+            .Select(g => new { Date = g.Key, Count = g.Count() })
+            .ToListAsync();
+
+        var weeklyTrend = new List<DailyTrendDto>();
+        for (int i = 0; i < 7; i++)
+        {
+            var date = weekStart.AddDays(i);
+            weeklyTrend.Add(new DailyTrendDto
+            {
+                Date = date,
+                NewCount = newByDate.FirstOrDefault(d => d.Date == date)?.Count ?? 0,
+                CompletedCount = completedByDate.FirstOrDefault(d => d.Date == date)?.Count ?? 0
+            });
+        }
+
+        // Top technicians by completed jobs
+        var technicians = await _db.Technicians
+            .Include(t => t.Assignments)
+                .ThenInclude(a => a.ServiceRequest)
+            .ToListAsync();
+
+        var topTechnicians = technicians
+            .Select(t =>
+            {
+                var completedAssignments = t.Assignments.Where(a => a.CompletedAt.HasValue).ToList();
+                var ratings = completedAssignments
+                    .Where(a => a.ServiceRequest.Rating.HasValue)
+                    .Select(a => (double)a.ServiceRequest.Rating!.Value)
+                    .ToList();
+                return new TopTechnicianDto
+                {
+                    Id = t.Id,
+                    Name = t.Name,
+                    Specialty = t.Specialty,
+                    CompletedJobs = completedAssignments.Count,
+                    AverageRating = ratings.Count > 0 ? Math.Round(ratings.Average(), 1) : null
+                };
+            })
+            .Where(t => t.CompletedJobs > 0)
+            .OrderByDescending(t => t.CompletedJobs)
+            .Take(5)
+            .ToList();
+
         var dashboard = new DashboardDto
         {
             NewCount = await requests.CountAsync(r => r.Status == "New"),
@@ -81,7 +134,9 @@ public class DashboardController : ControllerBase
                         Notes = a.Notes
                     }).ToList()
                 })
-                .ToListAsync()
+                .ToListAsync(),
+            WeeklyTrend = weeklyTrend,
+            TopTechnicians = topTechnicians
         };
 
         return Ok(dashboard);
