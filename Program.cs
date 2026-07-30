@@ -97,6 +97,7 @@ app.UseSwagger();
 app.UseSwaggerUI();
 
 app.UseCors("AllowAdmin");
+app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();

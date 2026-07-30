@@ -141,7 +141,15 @@ public class WhatsAppController : ControllerBase
                         ? imgMime.GetString() : "image/jpeg";
                     var imageId = imageObj.TryGetProperty("id", out var imgId) ? imgId.GetString() : null;
                     if (imageId != null)
-                        mediaUrl = await _whatsApp.GetMediaUrlAsync(imageId);
+                    {
+                        var ext = mediaType switch
+                        {
+                            "image/png" => ".png",
+                            "image/webp" => ".webp",
+                            _ => ".jpg"
+                        };
+                        mediaUrl = await _whatsApp.DownloadAndStoreMediaAsync(imageId, ext);
+                    }
                     if (imageObj.TryGetProperty("caption", out var captionProp))
                         textBody = captionProp.GetString();
                 }
@@ -155,7 +163,15 @@ public class WhatsAppController : ControllerBase
                         ? vidMime.GetString() : "video/mp4";
                     var videoId = videoObj.TryGetProperty("id", out var vidId) ? vidId.GetString() : null;
                     if (videoId != null)
-                        mediaUrl = await _whatsApp.GetMediaUrlAsync(videoId);
+                    {
+                        var ext = mediaType switch
+                        {
+                            "video/3gpp" => ".3gp",
+                            "video/quicktime" => ".mov",
+                            _ => ".mp4"
+                        };
+                        mediaUrl = await _whatsApp.DownloadAndStoreMediaAsync(videoId, ext);
+                    }
                     if (videoObj.TryGetProperty("caption", out var vidCaption))
                         textBody = vidCaption.GetString();
                 }

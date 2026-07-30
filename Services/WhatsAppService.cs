@@ -223,6 +223,56 @@ public class WhatsAppService
         }
     }
 
+    /// <summary>
+    /// Downloads media from WhatsApp CDN and stores it locally in wwwroot/uploads.
+    /// Returns the local relative URL (e.g., /uploads/abc123.jpg).
+    /// </summary>
+    public async Task<string?> DownloadAndStoreMediaAsync(string mediaId, string extension)
+    {
+        if (!_isConfigured) return null;
+
+        try
+        {
+            // Step 1: Get the CDN URL from media ID
+            var metaResponse = await _httpClient.GetAsync($"{GraphApiBase}/{mediaId}");
+            if (!metaResponse.IsSuccessStatusCode) return null;
+
+            var metaJson = await metaResponse.Content.ReadAsStringAsync();
+            using var doc = JsonDocument.Parse(metaJson);
+            if (!doc.RootElement.TryGetProperty("url", out var urlProp))
+                return null;
+
+            var cdnUrl = urlProp.GetString();
+            if (string.IsNullOrEmpty(cdnUrl)) return null;
+
+            // Step 2: Download the actual media file (requires Bearer token)
+            var mediaResponse = await _httpClient.GetAsync(cdnUrl);
+            if (!mediaResponse.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("Failed to download media from CDN: {Status}", mediaResponse.StatusCode);
+                return null;
+            }
+
+            // Step 3: Save to wwwroot/uploads
+            var fileName = $"{Guid.NewGuid()}{extension}";
+            var uploadsDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads");
+            Directory.CreateDirectory(uploadsDir);
+            var filePath = Path.Combine(uploadsDir, fileName);
+
+            await using var fileStream = File.Create(filePath);
+            await mediaResponse.Content.CopyToAsync(fileStream);
+
+            _logger.LogInformation("Media saved: {FilePath} from mediaId {MediaId}", filePath, mediaId);
+
+            return $"/uploads/{fileName}";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to download and store media {MediaId}", mediaId);
+            return null;
+        }
+    }
+
     public async Task SendRequestConfirmation(int requestId, string phone)
     {
         var text = $"✅ *Request Received!*\n\n" +
@@ -275,7 +325,8 @@ public class WhatsAppService
         string requestCode, string customerName, string customerPhone,
         string serviceType, string? description, string? address, string? houseNumber,
         string? photoUrl = null, string? videoUrl = null,
-        double? latitude = null, double? longitude = null)
+        double? latitude = null, double? longitude = null,
+        string? baseUrl = null)
     {
         var location = address ?? houseNumber ?? "Not provided";
         if (address != null && houseNumber != null)
@@ -310,13 +361,24 @@ public class WhatsAppService
 
         await SendInteractiveButtonsAsync(techPhone, "New Job Assignment", bodyText, buttons);
 
+        // Build full URL for local paths (e.g., /uploads/abc.jpg → https://host/uploads/abc.jpg)
+        var fullPhotoUrl = photoUrl;
+        var fullVideoUrl = videoUrl;
+        if (!string.IsNullOrEmpty(baseUrl))
+        {
+            if (fullPhotoUrl?.StartsWith("/") == true)
+                fullPhotoUrl = baseUrl.TrimEnd('/') + fullPhotoUrl;
+            if (fullVideoUrl?.StartsWith("/") == true)
+                fullVideoUrl = baseUrl.TrimEnd('/') + fullVideoUrl;
+        }
+
         // Send photo as follow-up if available
-        if (!string.IsNullOrEmpty(photoUrl))
-            await SendImageAsync(techPhone, photoUrl, $"📸 Issue photo for {requestCode}");
+        if (!string.IsNullOrEmpty(fullPhotoUrl))
+            await SendImageAsync(techPhone, fullPhotoUrl, $"📸 Issue photo for {requestCode}");
 
         // Send video as follow-up if available
-        if (!string.IsNullOrEmpty(videoUrl))
-            await SendVideoAsync(techPhone, videoUrl, $"🎥 Issue video for {requestCode}");
+        if (!string.IsNullOrEmpty(fullVideoUrl))
+            await SendVideoAsync(techPhone, fullVideoUrl, $"🎥 Issue video for {requestCode}");
 
         // Send location as follow-up if available
         if (latitude.HasValue && longitude.HasValue)

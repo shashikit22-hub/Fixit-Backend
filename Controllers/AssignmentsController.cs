@@ -59,6 +59,7 @@ public class AssignmentsController : ControllerBase
         await _db.Entry(assignment).Reference(a => a.Technician).LoadAsync();
 
         // Send WhatsApp job assignment to technician with Accept/Reject buttons
+        var baseUrl = $"{Request.Scheme}://{Request.Host}";
         _ = _whatsApp.SendJobAssignmentToTechnician(
             assignment.Id,
             assignment.Technician.Phone,
@@ -73,7 +74,8 @@ public class AssignmentsController : ControllerBase
             serviceRequest.PhotoUrl,
             serviceRequest.VideoUrl,
             serviceRequest.Latitude,
-            serviceRequest.Longitude);
+            serviceRequest.Longitude,
+            baseUrl);
 
         // Send WhatsApp notification to customer
         _ = _whatsApp.SendTechnicianAssigned(
@@ -166,6 +168,7 @@ public class AssignmentsController : ControllerBase
         if (assignment.Status != AssignmentStatus.Pending)
             return BadRequest(new { message = "Can only resend notifications for pending assignments" });
 
+        var resendBaseUrl = $"{Request.Scheme}://{Request.Host}";
         _ = _whatsApp.SendJobAssignmentToTechnician(
             assignment.Id,
             assignment.Technician.Phone,
@@ -180,7 +183,8 @@ public class AssignmentsController : ControllerBase
             assignment.ServiceRequest.PhotoUrl,
             assignment.ServiceRequest.VideoUrl,
             assignment.ServiceRequest.Latitude,
-            assignment.ServiceRequest.Longitude);
+            assignment.ServiceRequest.Longitude,
+            resendBaseUrl);
 
         return Ok(new { message = "Notification resent to technician" });
     }
