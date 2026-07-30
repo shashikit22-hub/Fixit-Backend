@@ -13,6 +13,7 @@ public class FixitDbContext : DbContext
     public DbSet<WhatsAppMessage> WhatsAppMessages => Set<WhatsAppMessage>();
     public DbSet<AdminUser> AdminUsers => Set<AdminUser>();
     public DbSet<ConversationState> ConversationStates => Set<ConversationState>();
+    public DbSet<MediaFile> MediaFiles => Set<MediaFile>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -58,6 +59,14 @@ public class FixitDbContext : DbContext
                 .WithMany(sr => sr.WhatsAppMessages)
                 .HasForeignKey(w => w.ServiceRequestId)
                 .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<MediaFile>(entity =>
+        {
+            entity.Property(e => e.Id).HasColumnType("varchar(36)");
+            entity.Property(e => e.FileName).HasMaxLength(255);
+            entity.Property(e => e.ContentType).HasMaxLength(100);
+            entity.Property(e => e.Data).HasColumnType("longblob");
         });
 
         modelBuilder.Entity<AdminUser>(entity =>

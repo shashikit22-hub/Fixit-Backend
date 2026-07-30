@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace backend.Services;
 
@@ -8,6 +9,7 @@ public class WhatsAppService
 {
     private readonly HttpClient _httpClient;
     private readonly ILogger<WhatsAppService> _logger;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly string _phoneNumberId;
     private readonly string _accessToken;
     private readonly bool _isConfigured;
@@ -15,10 +17,11 @@ public class WhatsAppService
     private const string GraphApiBase = "https://graph.facebook.com/v21.0";
     private const string DefaultCountryCode = "91";
 
-    public WhatsAppService(HttpClient httpClient, IConfiguration config, ILogger<WhatsAppService> logger)
+    public WhatsAppService(HttpClient httpClient, IConfiguration config, ILogger<WhatsAppService> logger, IServiceScopeFactory scopeFactory)
     {
         _httpClient = httpClient;
         _logger = logger;
+        _scopeFactory = scopeFactory;
 
         _phoneNumberId = config["WhatsApp:PhoneNumberId"] ?? "";
         _accessToken = config["WhatsApp:AccessToken"] ?? "";
@@ -224,8 +227,8 @@ public class WhatsAppService
     }
 
     /// <summary>
-    /// Downloads media from WhatsApp CDN and stores it locally in wwwroot/uploads.
-    /// Returns the local relative URL (e.g., /uploads/abc123.jpg).
+    /// Downloads media from WhatsApp CDN and stores it in the database.
+    /// Returns the API URL (e.g., /api/media/{guid}).
     /// </summary>
     public async Task<string?> DownloadAndStoreMediaAsync(string mediaId, string extension)
     {
@@ -235,7 +238,11 @@ public class WhatsAppService
         {
             // Step 1: Get the CDN URL from media ID
             var metaResponse = await _httpClient.GetAsync($"{GraphApiBase}/{mediaId}");
-            if (!metaResponse.IsSuccessStatusCode) return null;
+            if (!metaResponse.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("Failed to get media metadata for {MediaId}: {Status}", mediaId, metaResponse.StatusCode);
+                return null;
+            }
 
             var metaJson = await metaResponse.Content.ReadAsStringAsync();
             using var doc = JsonDocument.Parse(metaJson);
@@ -253,18 +260,37 @@ public class WhatsAppService
                 return null;
             }
 
-            // Step 3: Save to wwwroot/uploads
-            var fileName = $"{Guid.NewGuid()}{extension}";
-            var uploadsDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads");
-            Directory.CreateDirectory(uploadsDir);
-            var filePath = Path.Combine(uploadsDir, fileName);
+            var bytes = await mediaResponse.Content.ReadAsByteArrayAsync();
+            var contentType = mediaResponse.Content.Headers.ContentType?.MediaType
+                ?? (extension switch
+                {
+                    ".jpg" or ".jpeg" => "image/jpeg",
+                    ".png" => "image/png",
+                    ".webp" => "image/webp",
+                    ".mp4" => "video/mp4",
+                    ".3gp" => "video/3gpp",
+                    ".mov" => "video/quicktime",
+                    _ => "application/octet-stream"
+                });
 
-            await using var fileStream = File.Create(filePath);
-            await mediaResponse.Content.CopyToAsync(fileStream);
+            // Step 3: Save to database
+            var media = new Models.MediaFile
+            {
+                Id = Guid.NewGuid(),
+                FileName = $"{mediaId}{extension}",
+                ContentType = contentType,
+                Data = bytes,
+                CreatedAt = DateTime.UtcNow
+            };
 
-            _logger.LogInformation("Media saved: {FilePath} from mediaId {MediaId}", filePath, mediaId);
+            using var scope = _scopeFactory.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<Data.FixitDbContext>();
+            db.MediaFiles.Add(media);
+            await db.SaveChangesAsync();
 
-            return $"/uploads/{fileName}";
+            _logger.LogInformation("Media saved to DB: {Id} ({Size} bytes) from mediaId {MediaId}", media.Id, bytes.Length, mediaId);
+
+            return $"/api/media/{media.Id}";
         }
         catch (Exception ex)
         {
