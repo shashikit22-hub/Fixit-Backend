@@ -517,7 +517,7 @@ public class ConversationService
         // Strip country code for DB lookup (DB may store 10-digit, WhatsApp sends with 91 prefix)
         var phoneLocal = phone.Length > 10 ? phone[^10..] : phone;
 
-        // Check for button press: accept_job_{id} or reject_job_{id}
+        // Check for button press: accept_job_{id}, reject_job_{id}, start_job_{id}, complete_job_{id}
         if (bodyLower.StartsWith("accept_job_") || bodyLower.StartsWith("reject_job_"))
         {
             var isAccept = bodyLower.StartsWith("accept_job_");
@@ -543,11 +543,52 @@ public class ConversationService
             }
         }
 
-        // Check text reply fallback: "1"/"accept" or "2"/"reject"
-        if (bodyLower is "1" or "accept" or "2" or "reject")
+        if (bodyLower.StartsWith("start_job_"))
         {
-            var technician = await _db.Technicians.FirstOrDefaultAsync(t => t.Phone == phone || t.Phone == phoneLocal);
-            if (technician != null)
+            var idPart = body.Substring("start_job_".Length);
+            if (int.TryParse(idPart, out var assignmentId))
+            {
+                var assignment = await _db.Assignments
+                    .Include(a => a.Technician)
+                    .Include(a => a.ServiceRequest)
+                    .FirstOrDefaultAsync(a => a.Id == assignmentId
+                        && (a.Technician.Phone == phone || a.Technician.Phone == phoneLocal)
+                        && a.Status == AssignmentStatus.Accepted);
+
+                if (assignment != null)
+                {
+                    await StartAssignmentAsync(assignment);
+                    return true;
+                }
+            }
+        }
+
+        if (bodyLower.StartsWith("complete_job_"))
+        {
+            var idPart = body.Substring("complete_job_".Length);
+            if (int.TryParse(idPart, out var assignmentId))
+            {
+                var assignment = await _db.Assignments
+                    .Include(a => a.Technician)
+                    .Include(a => a.ServiceRequest)
+                    .FirstOrDefaultAsync(a => a.Id == assignmentId
+                        && (a.Technician.Phone == phone || a.Technician.Phone == phoneLocal)
+                        && a.Status == AssignmentStatus.Started);
+
+                if (assignment != null)
+                {
+                    await CompleteAssignmentAsync(assignment);
+                    return true;
+                }
+            }
+        }
+
+        // Check text reply fallback
+        var technician = await _db.Technicians.FirstOrDefaultAsync(t => t.Phone == phone || t.Phone == phoneLocal);
+        if (technician != null)
+        {
+            // "1"/"accept" or "2"/"reject" for pending assignments
+            if (bodyLower is "1" or "accept" or "2" or "reject")
             {
                 var pendingAssignment = await _db.Assignments
                     .Include(a => a.Technician)
@@ -565,21 +606,71 @@ public class ConversationService
                     return true;
                 }
             }
-        }
 
-        // Check if sender is a technician with any pending assignment but sent something else
-        var tech = await _db.Technicians.FirstOrDefaultAsync(t => t.Phone == phone || t.Phone == phoneLocal);
-        if (tech != null)
-        {
-            var hasPending = await _db.Assignments
-                .AnyAsync(a => a.TechnicianId == tech.Id && a.Status == AssignmentStatus.Pending);
-
-            if (hasPending)
+            // "3"/"start" for accepted assignments
+            if (bodyLower is "3" or "start")
             {
-                await _whatsApp.SendMessageAsync(phone,
-                    "You have a pending job assignment.\n\n" +
-                    "Please reply *1* to *Accept* or *2* to *Reject*.");
-                return true;
+                var acceptedAssignment = await _db.Assignments
+                    .Include(a => a.Technician)
+                    .Include(a => a.ServiceRequest)
+                    .Where(a => a.TechnicianId == technician.Id && a.Status == AssignmentStatus.Accepted)
+                    .OrderByDescending(a => a.AcceptedAt)
+                    .FirstOrDefaultAsync();
+
+                if (acceptedAssignment != null)
+                {
+                    await StartAssignmentAsync(acceptedAssignment);
+                    return true;
+                }
+            }
+
+            // "4"/"complete"/"done" for started assignments
+            if (bodyLower is "4" or "complete" or "done")
+            {
+                var startedAssignment = await _db.Assignments
+                    .Include(a => a.Technician)
+                    .Include(a => a.ServiceRequest)
+                    .Where(a => a.TechnicianId == technician.Id && a.Status == AssignmentStatus.Started)
+                    .OrderByDescending(a => a.StartedAt)
+                    .FirstOrDefaultAsync();
+
+                if (startedAssignment != null)
+                {
+                    await CompleteAssignmentAsync(startedAssignment);
+                    return true;
+                }
+            }
+
+            // Check if sender is a technician with any active assignment but sent something unrelated
+            var activeAssignment = await _db.Assignments
+                .Where(a => a.TechnicianId == technician.Id
+                    && (a.Status == AssignmentStatus.Pending
+                        || a.Status == AssignmentStatus.Accepted
+                        || a.Status == AssignmentStatus.Started))
+                .OrderByDescending(a => a.AssignedAt)
+                .FirstOrDefaultAsync();
+
+            if (activeAssignment != null)
+            {
+                var reminder = activeAssignment.Status switch
+                {
+                    AssignmentStatus.Pending =>
+                        "You have a pending job assignment.\n\n" +
+                        "Please reply *1* to *Accept* or *2* to *Reject*.",
+                    AssignmentStatus.Accepted =>
+                        "You have an accepted job.\n\n" +
+                        "Please reply *3* or *start* when you begin work.",
+                    AssignmentStatus.Started =>
+                        "You have a job in progress.\n\n" +
+                        "Please reply *4* or *done* when you've completed the work.",
+                    _ => null
+                };
+
+                if (reminder != null)
+                {
+                    await _whatsApp.SendMessageAsync(phone, reminder);
+                    return true;
+                }
             }
         }
 
@@ -600,8 +691,9 @@ public class ConversationService
         var requestCode = assignment.ServiceRequest.RequestCode
             ?? $"#{assignment.ServiceRequest.Id}";
 
-        // Send confirmation to technician
+        // Send confirmation to technician (with Start Job button)
         _ = _whatsApp.SendJobAcceptedConfirmationToTechnician(
+            assignment.Id,
             assignment.Technician.Phone,
             requestCode,
             assignment.ServiceRequest.CustomerName,
@@ -647,6 +739,71 @@ public class ConversationService
             requestCode);
 
         _logger.LogInformation("Assignment {Id} rejected by technician {Tech} for request {Code}",
+            assignment.Id, assignment.Technician.Name, requestCode);
+    }
+
+    private async Task StartAssignmentAsync(Assignment assignment)
+    {
+        assignment.Status = AssignmentStatus.Started;
+        assignment.StartedAt = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync();
+
+        var requestCode = assignment.ServiceRequest.RequestCode
+            ?? $"#{assignment.ServiceRequest.Id}";
+
+        // Send confirmation to technician (with Complete Job button)
+        _ = _whatsApp.SendJobStartedConfirmationToTechnician(
+            assignment.Id,
+            assignment.Technician.Phone,
+            requestCode);
+
+        // Notify customer that work has started
+        _ = _whatsApp.SendJobStartedToCustomer(
+            assignment.ServiceRequest.CustomerPhone,
+            requestCode,
+            assignment.Technician.Name);
+
+        _logger.LogInformation("Assignment {Id} started by technician {Tech} for request {Code}",
+            assignment.Id, assignment.Technician.Name, requestCode);
+    }
+
+    private async Task CompleteAssignmentAsync(Assignment assignment)
+    {
+        assignment.Status = AssignmentStatus.Completed;
+        assignment.CompletedAt = DateTime.UtcNow;
+
+        // Check if all assignments for this request are completed
+        var allCompleted = await _db.Assignments
+            .Where(a => a.ServiceRequestId == assignment.ServiceRequestId && a.Id != assignment.Id)
+            .AllAsync(a => a.CompletedAt != null);
+
+        if (allCompleted)
+        {
+            assignment.ServiceRequest.Status = "Completed";
+            assignment.ServiceRequest.UpdatedAt = DateTime.UtcNow;
+        }
+
+        await _db.SaveChangesAsync();
+
+        var requestCode = assignment.ServiceRequest.RequestCode
+            ?? $"#{assignment.ServiceRequest.Id}";
+
+        // Send completion confirmation to technician
+        _ = _whatsApp.SendJobCompletedConfirmationToTechnician(
+            assignment.Technician.Phone,
+            requestCode);
+
+        // Send completion message + rating request to customer when all assignments are done
+        if (allCompleted)
+        {
+            _ = TriggerRatingFlowAsync(
+                assignment.ServiceRequest.Id,
+                assignment.ServiceRequest.CustomerPhone,
+                requestCode);
+        }
+
+        _logger.LogInformation("Assignment {Id} completed by technician {Tech} for request {Code}",
             assignment.Id, assignment.Technician.Name, requestCode);
     }
 

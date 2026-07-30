@@ -490,14 +490,20 @@ public class WhatsAppService
     }
 
     public async Task SendJobAcceptedConfirmationToTechnician(
-        string techPhone, string requestCode, string customerName, string customerPhone)
+        int assignmentId, string techPhone, string requestCode, string customerName, string customerPhone)
     {
-        var text = $"✅ *Job Accepted!*\n\n" +
-                   $"You have accepted job *{requestCode}*.\n\n" +
-                   $"👤 *Customer:* {customerName}\n" +
-                   $"📞 *Phone:* {customerPhone}\n\n" +
-                   $"Please contact the customer to schedule your visit.";
-        await SendMessageAsync(techPhone, text);
+        var bodyText = $"✅ *Job Accepted!*\n\n" +
+                       $"You have accepted job *{requestCode}*.\n\n" +
+                       $"👤 *Customer:* {customerName}\n" +
+                       $"📞 *Phone:* {customerPhone}\n\n" +
+                       $"Please tap *Start Job* when you begin work.";
+
+        var buttons = new (string Id, string Title)[]
+        {
+            ($"start_job_{assignmentId}", "▶️ Start Job")
+        };
+
+        await SendInteractiveButtonsAsync(techPhone, "Job Accepted", bodyText, buttons);
     }
 
     public async Task SendJobRejectedConfirmationToTechnician(string techPhone, string requestCode)
@@ -517,6 +523,39 @@ public class WhatsAppService
                    $"📞 *Contact:* {techPhone}\n\n" +
                    $"They will contact you shortly to schedule a visit.";
         await SendMessageAsync(customerPhone, text);
+    }
+
+    public async Task SendJobStartedConfirmationToTechnician(
+        int assignmentId, string techPhone, string requestCode)
+    {
+        var bodyText = $"🔧 *Job Started!*\n\n" +
+                       $"You've started working on job *{requestCode}*.\n\n" +
+                       $"Tap *Complete Job* when you're done.";
+
+        var buttons = new (string Id, string Title)[]
+        {
+            ($"complete_job_{assignmentId}", "✅ Complete Job")
+        };
+
+        await SendInteractiveButtonsAsync(techPhone, "Job Started", bodyText, buttons);
+    }
+
+    public async Task SendJobStartedToCustomer(
+        string customerPhone, string requestCode, string techName)
+    {
+        var text = $"🔧 *Work Started!*\n\n" +
+                   $"Your technician *{techName}* has started working on request *{requestCode}*.\n\n" +
+                   $"We'll notify you once the work is completed.";
+        await SendMessageAsync(customerPhone, text);
+    }
+
+    public async Task SendJobCompletedConfirmationToTechnician(
+        string techPhone, string requestCode)
+    {
+        var text = $"✅ *Job Completed!*\n\n" +
+                   $"You've completed job *{requestCode}*.\n\n" +
+                   $"Thank you for your service!";
+        await SendMessageAsync(techPhone, text);
     }
 
     public async Task SendStatusUpdate(int requestId, string phone, string newStatus)

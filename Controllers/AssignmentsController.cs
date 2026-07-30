@@ -95,6 +95,7 @@ public class AssignmentsController : ControllerBase
             CompletedAt = assignment.CompletedAt,
             Status = assignment.Status,
             AcceptedAt = assignment.AcceptedAt,
+            StartedAt = assignment.StartedAt,
             RejectedAt = assignment.RejectedAt,
             Notes = assignment.Notes
         });
@@ -149,6 +150,7 @@ public class AssignmentsController : ControllerBase
             CompletedAt = assignment.CompletedAt,
             Status = assignment.Status,
             AcceptedAt = assignment.AcceptedAt,
+            StartedAt = assignment.StartedAt,
             RejectedAt = assignment.RejectedAt,
             Notes = assignment.Notes
         });

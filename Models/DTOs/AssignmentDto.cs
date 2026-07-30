@@ -24,6 +24,7 @@ public class AssignmentResponseDto
     public DateTime? CompletedAt { get; set; }
     public string Status { get; set; } = "Pending";
     public DateTime? AcceptedAt { get; set; }
+    public DateTime? StartedAt { get; set; }
     public DateTime? RejectedAt { get; set; }
     public string? Notes { get; set; }
 }

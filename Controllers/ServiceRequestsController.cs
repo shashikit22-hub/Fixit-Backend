@@ -231,6 +231,7 @@ public class ServiceRequestsController : ControllerBase
             CompletedAt = a.CompletedAt,
             Status = a.Status,
             AcceptedAt = a.AcceptedAt,
+            StartedAt = a.StartedAt,
             RejectedAt = a.RejectedAt,
             Notes = a.Notes
         }).ToList()
