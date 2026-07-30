@@ -13,6 +13,7 @@ public class WhatsAppService
     private readonly bool _isConfigured;
 
     private const string GraphApiBase = "https://graph.facebook.com/v21.0";
+    private const string DefaultCountryCode = "91";
 
     public WhatsAppService(HttpClient httpClient, IConfiguration config, ILogger<WhatsAppService> logger)
     {
@@ -34,6 +35,7 @@ public class WhatsAppService
 
     public async Task SendMessageAsync(string toPhone, string text)
     {
+        toPhone = NormalizePhone(toPhone);
         if (!_isConfigured)
         {
             _logger.LogInformation("WhatsApp Cloud API not configured — skipping message to {Phone}", toPhone);
@@ -64,6 +66,7 @@ public class WhatsAppService
     /// </summary>
     public async Task SendInteractiveButtonsAsync(string toPhone, string? headerText, string bodyText, (string Id, string Title)[] buttons)
     {
+        toPhone = NormalizePhone(toPhone);
         if (!_isConfigured)
         {
             _logger.LogInformation("WhatsApp Cloud API not configured — skipping interactive buttons to {Phone}", toPhone);
@@ -114,6 +117,7 @@ public class WhatsAppService
     /// </summary>
     public async Task SendInteractiveListAsync(string toPhone, string? headerText, string bodyText, string buttonLabel, (string Id, string Title, string? Description)[] rows)
     {
+        toPhone = NormalizePhone(toPhone);
         if (!_isConfigured)
         {
             _logger.LogInformation("WhatsApp Cloud API not configured — skipping interactive list to {Phone}", toPhone);
@@ -165,6 +169,17 @@ public class WhatsAppService
         {
             _logger.LogWarning(ex, "Failed to send interactive list to {Phone}", toPhone);
         }
+    }
+
+    /// <summary>
+    /// Ensures phone number has country code prefix (defaults to 91 for India).
+    /// </summary>
+    private static string NormalizePhone(string phone)
+    {
+        var digits = new string(phone.Where(char.IsDigit).ToArray());
+        if (digits.Length == 10)
+            digits = DefaultCountryCode + digits;
+        return digits;
     }
 
     private async Task PostPayloadAsync(string toPhone, object payload)

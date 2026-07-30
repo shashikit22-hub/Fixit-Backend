@@ -514,6 +514,8 @@ public class ConversationService
     private async Task<bool> TryHandleTechnicianJobResponseAsync(string phone, string body)
     {
         var bodyLower = body.ToLowerInvariant();
+        // Strip country code for DB lookup (DB may store 10-digit, WhatsApp sends with 91 prefix)
+        var phoneLocal = phone.Length > 10 ? phone[^10..] : phone;
 
         // Check for button press: accept_job_{id} or reject_job_{id}
         if (bodyLower.StartsWith("accept_job_") || bodyLower.StartsWith("reject_job_"))
@@ -527,7 +529,7 @@ public class ConversationService
                     .Include(a => a.Technician)
                     .Include(a => a.ServiceRequest)
                     .FirstOrDefaultAsync(a => a.Id == assignmentId
-                        && a.Technician.Phone == phone
+                        && (a.Technician.Phone == phone || a.Technician.Phone == phoneLocal)
                         && a.Status == AssignmentStatus.Pending);
 
                 if (assignment != null)
@@ -544,7 +546,7 @@ public class ConversationService
         // Check text reply fallback: "1"/"accept" or "2"/"reject"
         if (bodyLower is "1" or "accept" or "2" or "reject")
         {
-            var technician = await _db.Technicians.FirstOrDefaultAsync(t => t.Phone == phone);
+            var technician = await _db.Technicians.FirstOrDefaultAsync(t => t.Phone == phone || t.Phone == phoneLocal);
             if (technician != null)
             {
                 var pendingAssignment = await _db.Assignments
@@ -566,7 +568,7 @@ public class ConversationService
         }
 
         // Check if sender is a technician with any pending assignment but sent something else
-        var tech = await _db.Technicians.FirstOrDefaultAsync(t => t.Phone == phone);
+        var tech = await _db.Technicians.FirstOrDefaultAsync(t => t.Phone == phone || t.Phone == phoneLocal);
         if (tech != null)
         {
             var hasPending = await _db.Assignments
