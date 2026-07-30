@@ -69,7 +69,11 @@ public class AssignmentsController : ControllerBase
             serviceRequest.ServiceType,
             serviceRequest.Description,
             serviceRequest.Address,
-            serviceRequest.HouseNumber);
+            serviceRequest.HouseNumber,
+            serviceRequest.PhotoUrl,
+            serviceRequest.VideoUrl,
+            serviceRequest.Latitude,
+            serviceRequest.Longitude);
 
         // Send WhatsApp notification to customer
         _ = _whatsApp.SendTechnicianAssigned(
@@ -172,7 +176,11 @@ public class AssignmentsController : ControllerBase
             assignment.ServiceRequest.ServiceType,
             assignment.ServiceRequest.Description,
             assignment.ServiceRequest.Address,
-            assignment.ServiceRequest.HouseNumber);
+            assignment.ServiceRequest.HouseNumber,
+            assignment.ServiceRequest.PhotoUrl,
+            assignment.ServiceRequest.VideoUrl,
+            assignment.ServiceRequest.Latitude,
+            assignment.ServiceRequest.Longitude);
 
         return Ok(new { message = "Notification resent to technician" });
     }

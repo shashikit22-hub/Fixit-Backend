@@ -273,11 +273,17 @@ public class WhatsAppService
     public async Task SendJobAssignmentToTechnician(
         int assignmentId, string techPhone, string techName,
         string requestCode, string customerName, string customerPhone,
-        string serviceType, string? description, string? address, string? houseNumber)
+        string serviceType, string? description, string? address, string? houseNumber,
+        string? photoUrl = null, string? videoUrl = null,
+        double? latitude = null, double? longitude = null)
     {
         var location = address ?? houseNumber ?? "Not provided";
         if (address != null && houseNumber != null)
             location = $"{houseNumber}, {address}";
+
+        var mapLink = latitude.HasValue && longitude.HasValue
+            ? $"https://maps.google.com/?q={latitude.Value},{longitude.Value}"
+            : null;
 
         var desc = description ?? "No description";
         if (desc.Length > 200)
@@ -288,9 +294,13 @@ public class WhatsAppService
                        $"🔧 *Service:* {serviceType}\n" +
                        $"👤 *Customer:* {customerName}\n" +
                        $"📞 *Phone:* {customerPhone}\n" +
-                       $"📍 *Location:* {location}\n" +
-                       $"📝 *Description:* {desc}\n\n" +
-                       $"Please accept or reject this job.";
+                       $"📍 *Location:* {location}\n";
+
+        if (mapLink != null)
+            bodyText += $"🗺️ *Map:* {mapLink}\n";
+
+        bodyText += $"📝 *Description:* {desc}\n\n" +
+                    $"Please accept or reject this job.";
 
         var buttons = new (string Id, string Title)[]
         {
@@ -299,6 +309,96 @@ public class WhatsAppService
         };
 
         await SendInteractiveButtonsAsync(techPhone, "New Job Assignment", bodyText, buttons);
+
+        // Send photo as follow-up if available
+        if (!string.IsNullOrEmpty(photoUrl))
+            await SendImageAsync(techPhone, photoUrl, $"📸 Issue photo for {requestCode}");
+
+        // Send video as follow-up if available
+        if (!string.IsNullOrEmpty(videoUrl))
+            await SendVideoAsync(techPhone, videoUrl, $"🎥 Issue video for {requestCode}");
+
+        // Send location as follow-up if available
+        if (latitude.HasValue && longitude.HasValue)
+            await SendLocationAsync(techPhone, latitude.Value, longitude.Value, customerName, location);
+    }
+
+    public async Task SendImageAsync(string toPhone, string imageUrl, string? caption = null)
+    {
+        toPhone = NormalizePhone(toPhone);
+        if (!_isConfigured) return;
+
+        try
+        {
+            var image = new Dictionary<string, string> { ["link"] = imageUrl };
+            if (caption != null) image["caption"] = caption;
+
+            var payload = new
+            {
+                messaging_product = "whatsapp",
+                to = toPhone,
+                type = "image",
+                image
+            };
+            await PostPayloadAsync(toPhone, payload);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to send image to {Phone}", toPhone);
+        }
+    }
+
+    public async Task SendVideoAsync(string toPhone, string videoUrl, string? caption = null)
+    {
+        toPhone = NormalizePhone(toPhone);
+        if (!_isConfigured) return;
+
+        try
+        {
+            var video = new Dictionary<string, string> { ["link"] = videoUrl };
+            if (caption != null) video["caption"] = caption;
+
+            var payload = new
+            {
+                messaging_product = "whatsapp",
+                to = toPhone,
+                type = "video",
+                video
+            };
+            await PostPayloadAsync(toPhone, payload);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to send video to {Phone}", toPhone);
+        }
+    }
+
+    public async Task SendLocationAsync(string toPhone, double latitude, double longitude, string name, string address)
+    {
+        toPhone = NormalizePhone(toPhone);
+        if (!_isConfigured) return;
+
+        try
+        {
+            var payload = new
+            {
+                messaging_product = "whatsapp",
+                to = toPhone,
+                type = "location",
+                location = new
+                {
+                    latitude,
+                    longitude,
+                    name,
+                    address
+                }
+            };
+            await PostPayloadAsync(toPhone, payload);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to send location to {Phone}", toPhone);
+        }
     }
 
     public async Task SendJobAcceptedConfirmationToTechnician(
