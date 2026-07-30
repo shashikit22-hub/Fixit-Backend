@@ -229,6 +229,9 @@ public class ServiceRequestsController : ControllerBase
             TechnicianPhone = a.Technician?.Phone ?? "",
             AssignedAt = a.AssignedAt,
             CompletedAt = a.CompletedAt,
+            Status = a.Status,
+            AcceptedAt = a.AcceptedAt,
+            RejectedAt = a.RejectedAt,
             Notes = a.Notes
         }).ToList()
     };

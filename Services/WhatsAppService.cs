@@ -255,6 +255,67 @@ public class WhatsAppService
             rows);
     }
 
+    public async Task SendJobAssignmentToTechnician(
+        int assignmentId, string techPhone, string techName,
+        string requestCode, string customerName, string customerPhone,
+        string serviceType, string? description, string? address, string? houseNumber)
+    {
+        var location = address ?? houseNumber ?? "Not provided";
+        if (address != null && houseNumber != null)
+            location = $"{houseNumber}, {address}";
+
+        var desc = description ?? "No description";
+        if (desc.Length > 200)
+            desc = desc[..200] + "...";
+
+        var bodyText = $"Hi {techName}! You have a new job assignment.\n\n" +
+                       $"🔖 *Job ID:* {requestCode}\n" +
+                       $"🔧 *Service:* {serviceType}\n" +
+                       $"👤 *Customer:* {customerName}\n" +
+                       $"📞 *Phone:* {customerPhone}\n" +
+                       $"📍 *Location:* {location}\n" +
+                       $"📝 *Description:* {desc}\n\n" +
+                       $"Please accept or reject this job.";
+
+        var buttons = new (string Id, string Title)[]
+        {
+            ($"accept_job_{assignmentId}", "Accept"),
+            ($"reject_job_{assignmentId}", "Reject")
+        };
+
+        await SendInteractiveButtonsAsync(techPhone, "New Job Assignment", bodyText, buttons);
+    }
+
+    public async Task SendJobAcceptedConfirmationToTechnician(
+        string techPhone, string requestCode, string customerName, string customerPhone)
+    {
+        var text = $"✅ *Job Accepted!*\n\n" +
+                   $"You have accepted job *{requestCode}*.\n\n" +
+                   $"👤 *Customer:* {customerName}\n" +
+                   $"📞 *Phone:* {customerPhone}\n\n" +
+                   $"Please contact the customer to schedule your visit.";
+        await SendMessageAsync(techPhone, text);
+    }
+
+    public async Task SendJobRejectedConfirmationToTechnician(string techPhone, string requestCode)
+    {
+        var text = $"❌ *Job Rejected*\n\n" +
+                   $"You have rejected job *{requestCode}*.\n\n" +
+                   $"No worries! We'll assign another technician.";
+        await SendMessageAsync(techPhone, text);
+    }
+
+    public async Task SendTechnicianAcceptedToCustomer(
+        string customerPhone, string requestCode, string techName, string techPhone)
+    {
+        var text = $"🎉 *Technician Confirmed!*\n\n" +
+                   $"Great news! Your technician for request *{requestCode}* has accepted the job.\n\n" +
+                   $"👤 *Technician:* {techName}\n" +
+                   $"📞 *Contact:* {techPhone}\n\n" +
+                   $"They will contact you shortly to schedule a visit.";
+        await SendMessageAsync(customerPhone, text);
+    }
+
     public async Task SendStatusUpdate(int requestId, string phone, string newStatus)
     {
         var text = newStatus switch

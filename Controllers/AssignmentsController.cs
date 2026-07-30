@@ -40,7 +40,8 @@ public class AssignmentsController : ControllerBase
             ServiceRequestId = dto.ServiceRequestId,
             TechnicianId = dto.TechnicianId,
             Notes = dto.Notes,
-            AssignedAt = DateTime.UtcNow
+            AssignedAt = DateTime.UtcNow,
+            Status = AssignmentStatus.Pending
         };
 
         _db.Assignments.Add(assignment);
@@ -56,6 +57,19 @@ public class AssignmentsController : ControllerBase
 
         // Load technician for response
         await _db.Entry(assignment).Reference(a => a.Technician).LoadAsync();
+
+        // Send WhatsApp job assignment to technician with Accept/Reject buttons
+        _ = _whatsApp.SendJobAssignmentToTechnician(
+            assignment.Id,
+            assignment.Technician.Phone,
+            assignment.Technician.Name,
+            serviceRequest.RequestCode ?? $"#{serviceRequest.Id}",
+            serviceRequest.CustomerName,
+            serviceRequest.CustomerPhone,
+            serviceRequest.ServiceType,
+            serviceRequest.Description,
+            serviceRequest.Address,
+            serviceRequest.HouseNumber);
 
         // Send WhatsApp notification to customer
         _ = _whatsApp.SendTechnicianAssigned(
@@ -73,6 +87,9 @@ public class AssignmentsController : ControllerBase
             TechnicianPhone = assignment.Technician.Phone,
             AssignedAt = assignment.AssignedAt,
             CompletedAt = assignment.CompletedAt,
+            Status = assignment.Status,
+            AcceptedAt = assignment.AcceptedAt,
+            RejectedAt = assignment.RejectedAt,
             Notes = assignment.Notes
         });
     }
@@ -89,6 +106,7 @@ public class AssignmentsController : ControllerBase
             return NotFound(new { message = "Assignment not found" });
 
         assignment.CompletedAt = DateTime.UtcNow;
+        assignment.Status = AssignmentStatus.Completed;
 
         // Check if all assignments for this request are completed
         var allCompleted = await _db.Assignments
@@ -123,7 +141,39 @@ public class AssignmentsController : ControllerBase
             TechnicianPhone = assignment.Technician.Phone,
             AssignedAt = assignment.AssignedAt,
             CompletedAt = assignment.CompletedAt,
+            Status = assignment.Status,
+            AcceptedAt = assignment.AcceptedAt,
+            RejectedAt = assignment.RejectedAt,
             Notes = assignment.Notes
         });
+    }
+
+    [HttpPost("{id}/resend")]
+    public async Task<IActionResult> Resend(int id)
+    {
+        var assignment = await _db.Assignments
+            .Include(a => a.Technician)
+            .Include(a => a.ServiceRequest)
+            .FirstOrDefaultAsync(a => a.Id == id);
+
+        if (assignment == null)
+            return NotFound(new { message = "Assignment not found" });
+
+        if (assignment.Status != AssignmentStatus.Pending)
+            return BadRequest(new { message = "Can only resend notifications for pending assignments" });
+
+        _ = _whatsApp.SendJobAssignmentToTechnician(
+            assignment.Id,
+            assignment.Technician.Phone,
+            assignment.Technician.Name,
+            assignment.ServiceRequest.RequestCode ?? $"#{assignment.ServiceRequest.Id}",
+            assignment.ServiceRequest.CustomerName,
+            assignment.ServiceRequest.CustomerPhone,
+            assignment.ServiceRequest.ServiceType,
+            assignment.ServiceRequest.Description,
+            assignment.ServiceRequest.Address,
+            assignment.ServiceRequest.HouseNumber);
+
+        return Ok(new { message = "Notification resent to technician" });
     }
 }

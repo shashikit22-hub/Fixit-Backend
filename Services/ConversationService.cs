@@ -37,6 +37,10 @@ public class ConversationService
         double? lat,
         double? lon)
     {
+        // Intercept messages from technicians with pending assignments
+        var techJobHandled = await TryHandleTechnicianJobResponseAsync(phone, body?.Trim() ?? "");
+        if (techJobHandled) return;
+
         var state = await _db.ConversationStates
             .FirstOrDefaultAsync(c => c.PhoneNumber == phone);
 
@@ -505,6 +509,143 @@ public class ConversationService
         await _whatsApp.SendMessageAsync(state.PhoneNumber, thankYouMessage);
 
         _logger.LogInformation("Rating {Rating} received from {Phone}", rating, state.PhoneNumber);
+    }
+
+    private async Task<bool> TryHandleTechnicianJobResponseAsync(string phone, string body)
+    {
+        var bodyLower = body.ToLowerInvariant();
+
+        // Check for button press: accept_job_{id} or reject_job_{id}
+        if (bodyLower.StartsWith("accept_job_") || bodyLower.StartsWith("reject_job_"))
+        {
+            var isAccept = bodyLower.StartsWith("accept_job_");
+            var idPart = body.Substring(isAccept ? "accept_job_".Length : "reject_job_".Length);
+
+            if (int.TryParse(idPart, out var assignmentId))
+            {
+                var assignment = await _db.Assignments
+                    .Include(a => a.Technician)
+                    .Include(a => a.ServiceRequest)
+                    .FirstOrDefaultAsync(a => a.Id == assignmentId
+                        && a.Technician.Phone == phone
+                        && a.Status == AssignmentStatus.Pending);
+
+                if (assignment != null)
+                {
+                    if (isAccept)
+                        await AcceptAssignmentAsync(assignment);
+                    else
+                        await RejectAssignmentAsync(assignment);
+                    return true;
+                }
+            }
+        }
+
+        // Check text reply fallback: "1"/"accept" or "2"/"reject"
+        if (bodyLower is "1" or "accept" or "2" or "reject")
+        {
+            var technician = await _db.Technicians.FirstOrDefaultAsync(t => t.Phone == phone);
+            if (technician != null)
+            {
+                var pendingAssignment = await _db.Assignments
+                    .Include(a => a.Technician)
+                    .Include(a => a.ServiceRequest)
+                    .Where(a => a.TechnicianId == technician.Id && a.Status == AssignmentStatus.Pending)
+                    .OrderByDescending(a => a.AssignedAt)
+                    .FirstOrDefaultAsync();
+
+                if (pendingAssignment != null)
+                {
+                    if (bodyLower is "1" or "accept")
+                        await AcceptAssignmentAsync(pendingAssignment);
+                    else
+                        await RejectAssignmentAsync(pendingAssignment);
+                    return true;
+                }
+            }
+        }
+
+        // Check if sender is a technician with any pending assignment but sent something else
+        var tech = await _db.Technicians.FirstOrDefaultAsync(t => t.Phone == phone);
+        if (tech != null)
+        {
+            var hasPending = await _db.Assignments
+                .AnyAsync(a => a.TechnicianId == tech.Id && a.Status == AssignmentStatus.Pending);
+
+            if (hasPending)
+            {
+                await _whatsApp.SendMessageAsync(phone,
+                    "You have a pending job assignment.\n\n" +
+                    "Please reply *1* to *Accept* or *2* to *Reject*.");
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private async Task AcceptAssignmentAsync(Assignment assignment)
+    {
+        assignment.Status = AssignmentStatus.Accepted;
+        assignment.AcceptedAt = DateTime.UtcNow;
+
+        // Move request to InProgress
+        assignment.ServiceRequest.Status = "InProgress";
+        assignment.ServiceRequest.UpdatedAt = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync();
+
+        var requestCode = assignment.ServiceRequest.RequestCode
+            ?? $"#{assignment.ServiceRequest.Id}";
+
+        // Send confirmation to technician
+        _ = _whatsApp.SendJobAcceptedConfirmationToTechnician(
+            assignment.Technician.Phone,
+            requestCode,
+            assignment.ServiceRequest.CustomerName,
+            assignment.ServiceRequest.CustomerPhone);
+
+        // Notify customer
+        _ = _whatsApp.SendTechnicianAcceptedToCustomer(
+            assignment.ServiceRequest.CustomerPhone,
+            requestCode,
+            assignment.Technician.Name,
+            assignment.Technician.Phone);
+
+        _logger.LogInformation("Assignment {Id} accepted by technician {Tech} for request {Code}",
+            assignment.Id, assignment.Technician.Name, requestCode);
+    }
+
+    private async Task RejectAssignmentAsync(Assignment assignment)
+    {
+        assignment.Status = AssignmentStatus.Rejected;
+        assignment.RejectedAt = DateTime.UtcNow;
+
+        // Check if there are other active (non-rejected) assignments for this request
+        var hasOtherActive = await _db.Assignments
+            .AnyAsync(a => a.ServiceRequestId == assignment.ServiceRequestId
+                && a.Id != assignment.Id
+                && a.Status != AssignmentStatus.Rejected);
+
+        if (!hasOtherActive)
+        {
+            // Revert request status to New
+            assignment.ServiceRequest.Status = "New";
+            assignment.ServiceRequest.UpdatedAt = DateTime.UtcNow;
+        }
+
+        await _db.SaveChangesAsync();
+
+        var requestCode = assignment.ServiceRequest.RequestCode
+            ?? $"#{assignment.ServiceRequest.Id}";
+
+        // Send confirmation to technician
+        _ = _whatsApp.SendJobRejectedConfirmationToTechnician(
+            assignment.Technician.Phone,
+            requestCode);
+
+        _logger.LogInformation("Assignment {Id} rejected by technician {Tech} for request {Code}",
+            assignment.Id, assignment.Technician.Name, requestCode);
     }
 
     private static void ResetState(ConversationState state)

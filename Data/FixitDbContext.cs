@@ -39,6 +39,8 @@ public class FixitDbContext : DbContext
 
         modelBuilder.Entity<Assignment>(entity =>
         {
+            entity.HasIndex(a => a.Status);
+
             entity.HasOne(a => a.ServiceRequest)
                 .WithMany(sr => sr.Assignments)
                 .HasForeignKey(a => a.ServiceRequestId)

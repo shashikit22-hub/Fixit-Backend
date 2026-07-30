@@ -111,4 +111,5 @@ public class TechnicianAssignmentDto
     public DateTime? CompletedAt { get; set; }
     public string? Notes { get; set; }
     public int? Rating { get; set; }
+    public string AssignmentStatus { get; set; } = "Pending";
 }

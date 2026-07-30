@@ -125,6 +125,7 @@ public class TechniciansController : ControllerBase
                 CompletedAt = a.CompletedAt,
                 Notes = a.Notes,
                 Rating = a.ServiceRequest.Rating,
+                AssignmentStatus = a.Status,
             }).ToList()
         };
 
