@@ -284,7 +284,7 @@ public class WhatsAppService
             };
 
             using var scope = _scopeFactory.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<Data.FixitDbContext>();
+            var db = scope.ServiceProvider.GetRequiredService<Data.TinyfixDbContext>();
             db.MediaFiles.Add(media);
             await db.SaveChangesAsync();
 
@@ -304,7 +304,7 @@ public class WhatsAppService
         var text = $"✅ *Request Received!*\n\n" +
                    $"Your service request *#{requestId}* has been logged successfully.\n\n" +
                    $"Our team is reviewing your request and will assign a technician shortly.\n\n" +
-                   $"Thank you for choosing *FIXIT*! 🙏";
+                   $"Thank you for choosing *TinyFix*! 🙏";
         await SendMessageAsync(phone, text);
     }
 
@@ -323,7 +323,7 @@ public class WhatsAppService
         var text = $"🎉 *Service Completed!*\n\n" +
                    $"Your service request *#{requestId}* has been marked as completed.\n\n" +
                    $"We hope everything is in great shape! You'll receive a rating request shortly.\n\n" +
-                   $"Thank you for choosing *FIXIT*! 🙏";
+                   $"Thank you for choosing *TinyFix*! 🙏";
         await SendMessageAsync(phone, text);
     }
 
@@ -567,7 +567,7 @@ public class WhatsAppService
                            $"Our technician is on it! We'll notify you once it's completed.",
             "Completed" => $"🎉 *Service Completed!*\n\n" +
                           $"Your service request *#{requestId}* has been completed successfully.\n\n" +
-                          $"Thank you for choosing *FIXIT*! 🙏",
+                          $"Thank you for choosing *TinyFix*! 🙏",
             "Cancelled" => $"❌ *Request Cancelled*\n\n" +
                           $"Your service request *#{requestId}* has been cancelled.\n\n" +
                           $"If this was a mistake, send *hi* to start a new request.",

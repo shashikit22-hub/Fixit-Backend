@@ -12,10 +12,10 @@ namespace backend.Controllers;
 [Route("api/[controller]")]
 public class AuthController : ControllerBase
 {
-    private readonly FixitDbContext _db;
+    private readonly TinyfixDbContext _db;
     private readonly JwtTokenService _jwt;
 
-    public AuthController(FixitDbContext db, JwtTokenService jwt)
+    public AuthController(TinyfixDbContext db, JwtTokenService jwt)
     {
         _db = db;
         _jwt = jwt;

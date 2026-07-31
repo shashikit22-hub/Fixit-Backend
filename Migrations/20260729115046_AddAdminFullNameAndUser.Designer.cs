@@ -11,7 +11,7 @@ using backend.Data;
 
 namespace backend.Migrations
 {
-    [DbContext(typeof(FixitDbContext))]
+    [DbContext(typeof(TinyfixDbContext))]
     [Migration("20260729115046_AddAdminFullNameAndUser")]
     partial class AddAdminFullNameAndUser
     {

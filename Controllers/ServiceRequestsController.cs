@@ -12,12 +12,12 @@ namespace backend.Controllers;
 [Route("api/[controller]")]
 public class ServiceRequestsController : ControllerBase
 {
-    private readonly FixitDbContext _db;
+    private readonly TinyfixDbContext _db;
     private readonly ExcelExportService _excel;
 
     private readonly WhatsAppService _whatsApp;
 
-    public ServiceRequestsController(FixitDbContext db, ExcelExportService excel, WhatsAppService whatsApp)
+    public ServiceRequestsController(TinyfixDbContext db, ExcelExportService excel, WhatsAppService whatsApp)
     {
         _db = db;
         _excel = excel;

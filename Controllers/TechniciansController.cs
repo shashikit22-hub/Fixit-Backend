@@ -12,9 +12,9 @@ namespace backend.Controllers;
 [Authorize]
 public class TechniciansController : ControllerBase
 {
-    private readonly FixitDbContext _db;
+    private readonly TinyfixDbContext _db;
 
-    public TechniciansController(FixitDbContext db)
+    public TechniciansController(TinyfixDbContext db)
     {
         _db = db;
     }

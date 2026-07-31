@@ -11,7 +11,7 @@ using backend.Data;
 
 namespace backend.Migrations
 {
-    [DbContext(typeof(FixitDbContext))]
+    [DbContext(typeof(TinyfixDbContext))]
     [Migration("20260729121514_AddTechnicianProfileFields")]
     partial class AddTechnicianProfileFields
     {

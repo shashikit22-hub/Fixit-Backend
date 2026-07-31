@@ -11,7 +11,7 @@ using backend.Data;
 
 namespace backend.Migrations
 {
-    [DbContext(typeof(FixitDbContext))]
+    [DbContext(typeof(TinyfixDbContext))]
     [Migration("20260728173440_AddConversationBotSupport")]
     partial class AddConversationBotSupport
     {

@@ -10,7 +10,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // MySQL + EF Core
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-builder.Services.AddDbContext<FixitDbContext>(options =>
+builder.Services.AddDbContext<TinyfixDbContext>(options =>
     options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString)));
 
 // JWT Authentication
@@ -45,7 +45,7 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
-    c.SwaggerDoc("v1", new OpenApiInfo { Title = "FIXIT API", Version = "v1" });
+    c.SwaggerDoc("v1", new OpenApiInfo { Title = "TINYFIX API", Version = "v1" });
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Description = "JWT Authorization header. Enter: Bearer {token}",
@@ -89,7 +89,7 @@ var app = builder.Build();
 // Apply migrations on startup
 using (var scope = app.Services.CreateScope())
 {
-    var db = scope.ServiceProvider.GetRequiredService<FixitDbContext>();
+    var db = scope.ServiceProvider.GetRequiredService<TinyfixDbContext>();
     db.Database.Migrate();
 }
 

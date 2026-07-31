@@ -13,11 +13,11 @@ namespace backend.Controllers;
 [Authorize]
 public class AssignmentsController : ControllerBase
 {
-    private readonly FixitDbContext _db;
+    private readonly TinyfixDbContext _db;
     private readonly WhatsAppService _whatsApp;
     private readonly ConversationService _conversation;
 
-    public AssignmentsController(FixitDbContext db, WhatsAppService whatsApp, ConversationService conversation)
+    public AssignmentsController(TinyfixDbContext db, WhatsAppService whatsApp, ConversationService conversation)
     {
         _db = db;
         _whatsApp = whatsApp;

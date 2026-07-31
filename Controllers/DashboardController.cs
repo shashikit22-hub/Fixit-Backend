@@ -11,9 +11,9 @@ namespace backend.Controllers;
 [Authorize]
 public class DashboardController : ControllerBase
 {
-    private readonly FixitDbContext _db;
+    private readonly TinyfixDbContext _db;
 
-    public DashboardController(FixitDbContext db)
+    public DashboardController(TinyfixDbContext db)
     {
         _db = db;
     }

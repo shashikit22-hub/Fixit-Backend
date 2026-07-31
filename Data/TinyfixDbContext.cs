@@ -3,9 +3,9 @@ using backend.Models;
 
 namespace backend.Data;
 
-public class FixitDbContext : DbContext
+public class TinyfixDbContext : DbContext
 {
-    public FixitDbContext(DbContextOptions<FixitDbContext> options) : base(options) { }
+    public TinyfixDbContext(DbContextOptions<TinyfixDbContext> options) : base(options) { }
 
     public DbSet<ServiceRequest> ServiceRequests => Set<ServiceRequest>();
     public DbSet<Technician> Technicians => Set<Technician>();

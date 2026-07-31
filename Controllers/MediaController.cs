@@ -8,9 +8,9 @@ namespace backend.Controllers;
 [Route("api/[controller]")]
 public class MediaController : ControllerBase
 {
-    private readonly FixitDbContext _db;
+    private readonly TinyfixDbContext _db;
 
-    public MediaController(FixitDbContext db) => _db = db;
+    public MediaController(TinyfixDbContext db) => _db = db;
 
     [HttpGet("{id:guid}")]
     [ResponseCache(Duration = 86400)]

@@ -10,8 +10,8 @@ using backend.Data;
 
 namespace backend.Migrations
 {
-    [DbContext(typeof(FixitDbContext))]
-    partial class FixitDbContextModelSnapshot : ModelSnapshot
+    [DbContext(typeof(TinyfixDbContext))]
+    partial class TinyfixDbContextModelSnapshot : ModelSnapshot
     {
         protected override void BuildModel(ModelBuilder modelBuilder)
         {

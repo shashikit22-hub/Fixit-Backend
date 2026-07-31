@@ -6,7 +6,7 @@ namespace backend.Services;
 
 public class ConversationService
 {
-    private readonly FixitDbContext _db;
+    private readonly TinyfixDbContext _db;
     private readonly WhatsAppService _whatsApp;
     private readonly ILogger<ConversationService> _logger;
 
@@ -20,7 +20,7 @@ public class ConversationService
         ["carpenter"] = "Carpenter"
     };
 
-    public ConversationService(FixitDbContext db, WhatsAppService whatsApp, ILogger<ConversationService> logger)
+    public ConversationService(TinyfixDbContext db, WhatsAppService whatsApp, ILogger<ConversationService> logger)
     {
         _db = db;
         _whatsApp = whatsApp;
@@ -73,7 +73,7 @@ public class ConversationService
         if (textLower is "help" or "?")
         {
             await _whatsApp.SendMessageAsync(phone,
-                "*FIXIT Help* ℹ️\n\n" +
+                "*TinyFix Help* ℹ️\n\n" +
                 "Here's what you can do:\n\n" +
                 "📋 *Commands:*\n" +
                 "• *menu* or *start* — Start a new request\n" +
@@ -182,7 +182,7 @@ public class ConversationService
 
     public async Task<string> GenerateRequestCodeAsync()
     {
-        var datePrefix = $"FIX-{DateTime.UtcNow:yyyyMMdd}-";
+        var datePrefix = $"TNF-{DateTime.UtcNow:yyyyMMdd}-";
 
         // Find the highest sequence number for today
         var today = DateTime.UtcNow.Date;
@@ -221,7 +221,7 @@ public class ConversationService
 
         await _whatsApp.SendInteractiveButtonsAsync(
             state.PhoneNumber,
-            "Welcome to FIXIT!",
+            "Welcome to TinyFix!",
             $"Hi {state.ProfileName ?? "there"}! 👋\n\nWe're here to help with your home repairs.\n\nWhat service do you need?",
             buttons);
     }
@@ -443,7 +443,7 @@ public class ConversationService
                       (serviceRequest.VideoUrl != null ? $"🎥 *Video:* Attached ✅\n" : $"🎥 *Video:* Skipped\n") +
                       $"━━━━━━━━━━━━━━━━━━\n\n" +
                       $"Our team will review your request and assign a technician shortly.\n\n" +
-                      $"Thank you for choosing *FIXIT*! 🙏\n" +
+                      $"Thank you for choosing *TinyFix*! 🙏\n" +
                       $"Send *menu* anytime to place a new request.";
 
         await _whatsApp.SendMessageAsync(state.PhoneNumber, summary);
@@ -497,10 +497,10 @@ public class ConversationService
         {
             >= 4 => $"🙏 *Thank you for your {stars} rating!*\n\n" +
                     $"We're thrilled you had a great experience! Your feedback motivates our team.\n\n" +
-                    $"See you next time on *FIXIT*! 💙",
+                    $"See you next time on *TinyFix*! 💙",
             3 => $"🙏 *Thank you for your {stars} rating!*\n\n" +
                  $"We appreciate your honest feedback. We'll keep working to improve our service.\n\n" +
-                 $"See you next time on *FIXIT*! 💙",
+                 $"See you next time on *TinyFix*! 💙",
             _ => $"🙏 *Thank you for your {stars} rating.*\n\n" +
                  $"We're sorry we didn't meet your expectations. Your feedback helps us do better.\n\n" +
                  $"We hope to serve you better next time! 💙"
