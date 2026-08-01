@@ -1,0 +1,25 @@
+# Starter pipeline
+# Start with a minimal pipeline that you can customize to build and deploy your code.
+# Add steps that build, run tests, deploy, and more:
+# https://aka.ms/yaml
+
+trigger:
+- main
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+    - task: UseDotNet@2
+      inputs:
+        packageType: 'sdk'
+        version: '8.x'
+
+    - script: dotnet publish -c Release -o $(Build.ArtifactStagingDirectory)
+      displayName: 'Build and Publish'
+
+    - task: AzureWebApp@1
+      inputs:
+        azureSubscription: 'Azure subscription 1'
+        appName: 'TinyfixAPI'
+        package: '$(Build.ArtifactStagingDirectory)'
