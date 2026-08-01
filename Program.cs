@@ -80,7 +80,7 @@ builder.Services.AddCors(options =>
                 "http://localhost:5173",
                 "http://localhost:3000",
                 "https://shashikit22-hub.github.io",
-                "https://lively-moss-07d50b700.azurestaticapps.net")
+                "https://salmon-cliff-0d931a810.7.azurestaticapps.net")
             .AllowAnyHeader()
             .AllowAnyMethod();
     });
