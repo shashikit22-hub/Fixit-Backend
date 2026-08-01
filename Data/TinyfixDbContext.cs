@@ -63,10 +63,9 @@ public class TinyfixDbContext : DbContext
 
         modelBuilder.Entity<MediaFile>(entity =>
         {
-            entity.Property(e => e.Id).HasColumnType("varchar(36)");
             entity.Property(e => e.FileName).HasMaxLength(255);
             entity.Property(e => e.ContentType).HasMaxLength(100);
-            entity.Property(e => e.Data).HasColumnType("longblob");
+            entity.Property(e => e.Data).HasColumnType("varbinary(max)");
         });
 
         modelBuilder.Entity<AdminUser>(entity =>
