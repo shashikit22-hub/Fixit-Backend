@@ -12,12 +12,12 @@ public class ConversationService
 
     private static readonly Dictionary<string, string> ServiceTypes = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["1"] = "Electrician",
-        ["2"] = "Plumber",
-        ["3"] = "Carpenter",
+        ["1"] = "Carpenter",
+        ["2"] = "Electrician",
+        ["3"] = "Plumber",
+        ["carpenter"] = "Carpenter",
         ["electrician"] = "Electrician",
-        ["plumber"] = "Plumber",
-        ["carpenter"] = "Carpenter"
+        ["plumber"] = "Plumber"
     };
 
     public ConversationService(TinyfixDbContext db, WhatsAppService whatsApp, ILogger<ConversationService> logger)
@@ -80,11 +80,11 @@ public class ConversationService
                 "• *reset* or *cancel* — Cancel current request\n" +
                 "• *help* or *?* — Show this help message\n\n" +
                 "📝 *How it works:*\n" +
-                "1. Choose a service (Electrician, Plumber, or Carpenter)\n" +
-                "2. Send a photo of the issue\n" +
-                "3. Optionally send a video\n" +
-                "4. Share your location\n" +
-                "5. Provide your details\n\n" +
+                "1. Share your name and area\n" +
+                "2. Choose a service (Carpenter, Electrician, or Plumber)\n" +
+                "3. Send a photo of the issue\n" +
+                "4. Optionally send a video\n" +
+                "5. Share your location\n\n" +
                 "A technician will be assigned to you shortly after! 🔧");
             return;
         }
@@ -124,6 +124,10 @@ public class ConversationService
                 await HandleGreetingAsync(state);
                 break;
 
+            case ConversationStep.NameAndArea:
+                await HandleNameAndAreaAsync(state, text);
+                break;
+
             case ConversationStep.ServiceSelection:
                 await HandleServiceSelectionAsync(state, text);
                 break;
@@ -140,12 +144,14 @@ public class ConversationService
                 await HandleLocationAsync(state, text, lat, lon);
                 break;
 
-            case ConversationStep.CustomerDetails:
-                await HandleCustomerDetailsAsync(state, text);
-                break;
-
             case ConversationStep.Idle:
                 // User sent a message after completing a request — start fresh
+                ResetState(state);
+                await HandleGreetingAsync(state);
+                break;
+
+            default:
+                // Stale or unknown step — reset and start over
                 ResetState(state);
                 await HandleGreetingAsync(state);
                 break;
@@ -208,21 +214,53 @@ public class ConversationService
 
     private async Task HandleGreetingAsync(ConversationState state)
     {
+        state.CurrentStep = ConversationStep.NameAndArea;
+        state.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        await _whatsApp.SendMessageAsync(state.PhoneNumber,
+            $"Hello, {state.ProfileName ?? "there"}! 👋");
+
+        await _whatsApp.SendMessageAsync(state.PhoneNumber,
+            "Welcome to *TINYFIX* — your trusted home repair service. We connect you with skilled technicians for all your repair needs.");
+
+        await _whatsApp.SendMessageAsync(state.PhoneNumber,
+            "Please send us your *name* and *area name* separated by a comma.\n\n" +
+            "Example:\n_Ravi Kumar, Koramangala_");
+    }
+
+    private async Task HandleNameAndAreaAsync(ConversationState state, string text)
+    {
+        var parts = text.Split(',', StringSplitOptions.TrimEntries);
+
+        if (parts.Length < 2 || string.IsNullOrWhiteSpace(parts[0]) || string.IsNullOrWhiteSpace(parts[1]))
+        {
+            await _whatsApp.SendMessageAsync(state.PhoneNumber,
+                "😅 I couldn't parse that. Please send your *name* and *area name* separated by a comma.\n\n" +
+                "Example:\n_Ravi Kumar, Koramangala_");
+            return;
+        }
+
+        state.CustomerName = parts[0];
+        state.CustomerArea = parts[1];
         state.CurrentStep = ConversationStep.ServiceSelection;
         state.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
 
+        await _whatsApp.SendMessageAsync(state.PhoneNumber,
+            "Thank you for sharing your details. ✅");
+
         var buttons = new (string Id, string Title)[]
         {
+            ("carpenter", "🪚 Carpenter"),
             ("electrician", "⚡ Electrician"),
-            ("plumber", "🔧 Plumber"),
-            ("carpenter", "🪚 Carpenter")
+            ("plumber", "🔧 Plumber")
         };
 
         await _whatsApp.SendInteractiveButtonsAsync(
             state.PhoneNumber,
-            "Welcome to TinyFix!",
-            $"Hi {state.ProfileName ?? "there"}! 👋\n\nWe're here to help with your home repairs.\n\nWhat service do you need?",
+            "Select a Service",
+            "What service do you need?",
             buttons);
     }
 
@@ -233,9 +271,9 @@ public class ConversationService
             // Resend buttons with friendly message
             var buttons = new (string Id, string Title)[]
             {
+                ("carpenter", "🪚 Carpenter"),
                 ("electrician", "⚡ Electrician"),
-                ("plumber", "🔧 Plumber"),
-                ("carpenter", "🪚 Carpenter")
+                ("plumber", "🔧 Plumber")
             };
 
             await _whatsApp.SendInteractiveButtonsAsync(
@@ -252,9 +290,8 @@ public class ConversationService
         await _db.SaveChangesAsync();
 
         await _whatsApp.SendMessageAsync(state.PhoneNumber,
-            $"✅ Great choice! *{serviceType}* selected.\n\n" +
-            "📸 Now, please send a *photo* of the issue.\n\n" +
-            "A clear photo helps our technician understand the problem and come prepared with the right tools.");
+            $"You have selected *{serviceType}*. ✅\n\n" +
+            "📸 Now, please send a *photo*, *video*, or share your *location* for the issue.");
     }
 
     private async Task HandlePhotoAsync(ConversationState state, int numMedia, string? mediaUrl, string? mediaType)
@@ -366,87 +403,42 @@ public class ConversationService
             return;
         }
 
-        state.CurrentStep = ConversationStep.CustomerDetails;
-        state.UpdatedAt = DateTime.UtcNow;
-        await _db.SaveChangesAsync();
-
-        await _whatsApp.SendMessageAsync(state.PhoneNumber,
-            "✅ Location saved!\n\n" +
-            "📝 Last step! Please provide your details in this format:\n\n" +
-            "*Name, House/Flat No., Alternate Phone*\n\n" +
-            "Example:\n_Ravi Kumar, #42 2nd Cross MG Road, 9876543210_\n\n" +
-            "💡 Alternate phone is optional — just send Name and House No. if you prefer.");
-    }
-
-    private async Task HandleCustomerDetailsAsync(ConversationState state, string text)
-    {
-        var parts = text.Split(',', StringSplitOptions.TrimEntries);
-
-        if (parts.Length < 2)
-        {
-            await _whatsApp.SendMessageAsync(state.PhoneNumber,
-                "😅 I couldn't parse that. Please provide your details separated by commas:\n\n" +
-                "*Name, House/Flat No., Alternate Phone*\n\n" +
-                "Example:\n_Ravi Kumar, #42 2nd Cross MG Road, 9876543210_\n\n" +
-                "💡 Make sure to include at least your *name* and *house/flat number*.");
-            return;
-        }
-
-        var customerName = parts[0];
-        var houseNumber = parts[1];
-        var altPhone = parts.Length >= 3 ? parts[2] : null;
-
         // Generate request code
         var requestCode = await GenerateRequestCodeAsync();
 
-        // Create the service request
+        // Create the service request directly (name/area already collected)
         var serviceRequest = new ServiceRequest
         {
-            CustomerName = customerName,
+            CustomerName = state.CustomerName ?? state.ProfileName ?? "Customer",
             CustomerPhone = state.PhoneNumber,
             ServiceType = state.SelectedServiceType ?? "General",
             Description = $"Service request via WhatsApp bot",
             RequestCode = requestCode,
             PhotoUrl = state.PhotoUrl,
             VideoUrl = state.VideoUrl,
-            Latitude = state.Latitude,
-            Longitude = state.Longitude,
-            Address = state.AddressText,
-            HouseNumber = houseNumber,
-            AlternatePhone = altPhone,
+            Latitude = state.Latitude ?? lat,
+            Longitude = state.Longitude ?? lon,
+            Address = state.AddressText ?? state.CustomerArea,
             Status = "New",
             CreatedAt = DateTime.UtcNow
         };
 
         _db.ServiceRequests.Add(serviceRequest);
-        await _db.SaveChangesAsync();
 
         // Set conversation to idle
         state.CurrentStep = ConversationStep.Idle;
         state.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
 
-        // Build rich summary message
-        var locationInfo = state.Latitude.HasValue
-            ? $"📍 *Location:* GPS ({state.Latitude:F4}, {state.Longitude:F4})"
-            : $"📍 *Location:* {state.AddressText}";
-
-        var summary = $"✅ *Service Request Submitted!*\n\n" +
-                      $"━━━━━━━━━━━━━━━━━━\n" +
-                      $"🔖 *Request ID:* {requestCode}\n" +
-                      $"🔧 *Service:* {serviceRequest.ServiceType}\n" +
-                      $"👤 *Name:* {customerName}\n" +
-                      $"🏠 *House:* {houseNumber}\n" +
-                      (altPhone != null ? $"📞 *Alt Phone:* {altPhone}\n" : "") +
-                      $"{locationInfo}\n" +
-                      $"📸 *Photo:* Attached ✅\n" +
-                      (serviceRequest.VideoUrl != null ? $"🎥 *Video:* Attached ✅\n" : $"🎥 *Video:* Skipped\n") +
-                      $"━━━━━━━━━━━━━━━━━━\n\n" +
-                      $"Our team will review your request and assign a technician shortly.\n\n" +
-                      $"Thank you for choosing *TinyFix*! 🙏\n" +
-                      $"Send *menu* anytime to place a new request.";
-
-        await _whatsApp.SendMessageAsync(state.PhoneNumber, summary);
+        await _whatsApp.SendMessageAsync(state.PhoneNumber,
+            $"Thank you! Your booking has been received. ✅\n\n" +
+            $"🔖 *Request ID:* {requestCode}\n" +
+            $"🔧 *Service:* {serviceRequest.ServiceType}\n" +
+            $"👤 *Name:* {serviceRequest.CustomerName}\n" +
+            $"📍 *Area:* {state.CustomerArea ?? "Provided"}\n\n" +
+            $"Our team will review your request and assign a technician shortly.\n\n" +
+            $"Thank you for choosing *TinyFix*! 🙏\n" +
+            $"Send *menu* anytime to place a new request.");
 
         _logger.LogInformation("Service request {Code} created via WhatsApp bot for {Phone}",
             requestCode, state.PhoneNumber);
@@ -810,6 +802,8 @@ public class ConversationService
     private static void ResetState(ConversationState state)
     {
         state.CurrentStep = ConversationStep.Greeting;
+        state.CustomerName = null;
+        state.CustomerArea = null;
         state.SelectedServiceType = null;
         state.PhotoUrl = null;
         state.VideoUrl = null;

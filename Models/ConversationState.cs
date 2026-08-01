@@ -31,6 +31,12 @@ public class ConversationState
     [MaxLength(500)]
     public string? AddressText { get; set; }
 
+    [MaxLength(100)]
+    public string? CustomerName { get; set; }
+
+    [MaxLength(200)]
+    public string? CustomerArea { get; set; }
+
     public int? AwaitingRatingForRequestId { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
