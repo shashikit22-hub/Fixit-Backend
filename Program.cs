@@ -79,7 +79,8 @@ builder.Services.AddCors(options =>
         policy.WithOrigins(
                 "http://localhost:5173",
                 "http://localhost:3000",
-                "https://shashikit22-hub.github.io")
+                "https://shashikit22-hub.github.io",
+                "https://lively-moss-07d50b700.azurestaticapps.net")
             .AllowAnyHeader()
             .AllowAnyMethod();
     });
