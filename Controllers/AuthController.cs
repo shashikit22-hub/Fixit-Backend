@@ -39,7 +39,7 @@ public class AuthController : ControllerBase
     }
 
     [HttpPost("register")]
-    [Authorize(Roles = "Admin")]
+    [AllowAnonymous]
     public async Task<IActionResult> Register([FromBody] RegisterDto dto)
     {
         if (await _db.AdminUsers.AnyAsync(u => u.Username == dto.Username))
